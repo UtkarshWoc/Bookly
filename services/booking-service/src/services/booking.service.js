@@ -1,5 +1,7 @@
+const crypto = require('crypto');
 const { isValidObjectId } = require('mongoose');
 const config = require('../config');
+const redis = require('../config/redis');
 const Booking = require('../models/booking.model');
 const seatClient = require('../clients/seat.client');
 const eventClient = require('../clients/event.client');
@@ -66,12 +68,31 @@ async function assertWithinHoldLimits(userId, eventId, seats) {
   }
 }
 
-// Step 1: validate against the catalog and hold the seats (gRPC LockSeats).
-async function createHold(userId, { eventId, seats }) {
-  await assertWithinHoldLimits(userId, eventId, seats);
+// One hold request per user at a time, so parallel requests cannot all slip past the limits.
+async function withUserMutex(userId, fn) {
+  const key = `hold-mutex:${userId}`;
+  const token = crypto.randomUUID();
+  if (!(await redis.set(key, token, 'EX', 15, 'NX'))) {
+    throw ApiError.conflict('Another seat hold for your account is in progress, please retry in a moment');
+  }
+  try {
+    return await fn();
+  } finally {
+    await redis.releaseIfOwner(key, token).catch(() => {});
+  }
+}
 
-  const event = await eventClient.getEvent(eventId);
+// Step 1: validate against the catalog and hold the seats (gRPC LockSeats).
+function createHold(userId, body) {
+  return withUserMutex(userId, () => holdSeats(userId, body));
+}
+
+async function holdSeats(userId, { eventId: requestedId, seats }) {
+  const event = await eventClient.getEvent(requestedId);
   if (!event) throw ApiError.notFound('Event not found');
+  // Always key locks by the catalog's canonical id, never by the raw request value.
+  const eventId = event.id;
+  await assertWithinHoldLimits(userId, eventId, seats);
   if (new Date(event.startsAt) <= new Date()) throw ApiError.badRequest('This event has already started');
   assertSeatsExist(seats, event.layout);
 
@@ -185,8 +206,9 @@ async function listForUser(userId) {
 }
 
 async function getAvailability(eventId) {
+  eventId = String(eventId).toLowerCase();
   const map = await seatClient.getSeatMap({ eventId });
-  return { eventId, lockedSeats: map.lockedSeats, bookedSeats: map.bookedSeats, lockTtlSeconds: map.lockTtlSeconds };
+  return { eventId,lockedSeats: map.lockedSeats, bookedSeats: map.bookedSeats, lockTtlSeconds: map.lockTtlSeconds };
 }
 
 module.exports = { createHold, pay, cancel, getById, listForUser, getAvailability };

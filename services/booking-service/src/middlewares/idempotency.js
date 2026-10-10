@@ -15,8 +15,8 @@ function redactForFingerprint(body = {}) {
 /**
  * Makes a mutating endpoint safe to retry via the `Idempotency-Key` header.
  *
- *  - First request claims the key in Redis (SET NX) and runs normally; its
- *    response (status < 500) is stored for IDEMPOTENCY_TTL_SECONDS.
+ *  - First request claims the key in Redis (SET NX) and runs normally; a
+ *    definitive response (2xx or 402) is stored for IDEMPOTENCY_TTL_SECONDS.
  *  - A retry with the same key replays the stored response instead of
  *    creating a duplicate booking or charging twice.
  *  - A retry while the first is still running gets 409.
@@ -54,9 +54,12 @@ function idempotency(req, res, next) {
     // Capture the eventual response so a retry can replay it.
     const originalJson = res.json.bind(res);
     res.json = (body) => {
-      const write = res.statusCode >= 500
-        ? redis.del(redisKey) // server errors are not cached: the client may retry for real
-        : redis.set(redisKey, JSON.stringify({ state: 'done', fingerprint, status: res.statusCode, body }), 'EX', ttl);
+      // Only definitive outcomes are replayed (success, or a declined payment).
+      // Validation errors, conflicts and server errors free the key so a retry runs for real.
+      const definitive = res.statusCode < 400 || res.statusCode === 402;
+      const write = definitive
+        ? redis.set(redisKey, JSON.stringify({ state: 'done', fingerprint, status: res.statusCode, body }), 'EX', ttl)
+        : redis.del(redisKey);
       write.catch(() => {});
       return originalJson(body);
     };

@@ -15,7 +15,8 @@ function passesLuhn(digits) {
 }
 
 const createBookingSchema = z.object({
-  eventId: z.string().regex(/^[a-f0-9]{24}$/i, 'eventId must be a valid id'),
+  // Lower-cased so one event can never map to two different seat-lock keys.
+  eventId: z.string().regex(/^[a-f0-9]{24}$/i, 'eventId must be a valid id').transform((id) => id.toLowerCase()),
   seats: z
     .array(z.string().trim().toUpperCase().regex(/^[A-Z][1-9][0-9]?$/, 'Seat must look like A1'))
     .min(1, 'Select at least one seat')
