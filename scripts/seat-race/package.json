@@ -1,0 +1,14 @@
+{
+  "name": "seat-race",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fires N concurrent LockSeats calls for the same seat to prove the Redis lock lets exactly one win.",
+  "main": "race.js",
+  "scripts": {
+    "race": "node race.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.5",
+    "@grpc/proto-loader": "^0.7.13"
+  }
+}

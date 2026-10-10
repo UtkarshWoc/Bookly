@@ -20,6 +20,10 @@ upstream event_service {
     keepalive 16;
 }
 
+upstream seat_service_grpc {
+    server seat-service:${SEAT_SERVICE_PORT};
+}
+
 # ---------- Response cache (public event catalog) ----------
 proxy_cache_path /var/cache/nginx/events levels=1:2 keys_zone=events_cache:10m
                  max_size=100m inactive=60s use_temp_path=off;
@@ -119,5 +123,20 @@ server {
         default_type application/json;
         add_header X-Request-Id $request_id always;
         return 503 '{"error":{"status":503,"message":"Upstream service unavailable"}}';
+    }
+}
+
+# =====================================================================
+#  gRPC proxy (dev only): nginx -> seat-service over HTTP/2 via grpc_pass.
+#  Published on 127.0.0.1 only; seat-service stays private to Docker.
+# =====================================================================
+server {
+    listen 9090;
+    http2 on;
+
+    location / {
+        grpc_pass grpc://seat_service_grpc;
+        grpc_connect_timeout 3s;
+        grpc_read_timeout 10s;
     }
 }

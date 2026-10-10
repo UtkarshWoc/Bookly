@@ -1,0 +1,64 @@
+// Contract between booking-service (client) and seat-service (server).
+// This file is the ONLY thing the two services share.
+syntax = "proto3";
+
+package bookly.seat.v1;
+
+service SeatService {
+  // Atomically hold every requested seat for user_id (Redis SET NX EX).
+  // All-or-nothing: if any seat is taken, the seats acquired by this call are released.
+  rpc LockSeats(LockRequest) returns (LockResponse);
+
+  // Turn a hold into a permanent booking. Idempotent per booking_id.
+  rpc ConfirmSeats(ConfirmRequest) returns (ConfirmResponse);
+
+  // Release holds owned by user_id (compensation path). Safe to call repeatedly.
+  rpc ReleaseSeats(ReleaseRequest) returns (ReleaseResponse);
+
+  // Current availability snapshot for an event.
+  rpc GetSeatMap(SeatMapRequest) returns (SeatMapResponse);
+}
+
+message LockRequest {
+  string event_id = 1;
+  repeated string seat_nos = 2;
+  string user_id = 3;
+}
+
+message LockResponse {
+  bool success = 1;
+  repeated string failed_seats = 2;
+  int32 ttl_seconds = 3;
+}
+
+message ConfirmRequest {
+  string event_id = 1;
+  repeated string seat_nos = 2;
+  string user_id = 3;
+  string booking_id = 4;
+}
+
+message ConfirmResponse {
+  bool success = 1;
+  repeated string failed_seats = 2;
+}
+
+message ReleaseRequest {
+  string event_id = 1;
+  repeated string seat_nos = 2;
+  string user_id = 3;
+}
+
+message ReleaseResponse {
+  int32 released_count = 1;
+}
+
+message SeatMapRequest {
+  string event_id = 1;
+}
+
+message SeatMapResponse {
+  repeated string locked_seats = 1;
+  repeated string booked_seats = 2;
+  int32 lock_ttl_seconds = 3;
+}
