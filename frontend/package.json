@@ -1,0 +1,25 @@
+{
+  "name": "bookly-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bookly web app (Next.js): browse events, pick seats, pay, manage tickets, admin catalog and an API explorer.",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "dotenv": "^16.4.7",
+    "tailwindcss": "^4.1.0"
+  }
+}

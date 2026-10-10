@@ -103,6 +103,20 @@ services:
       timeout: 3s
       retries: 20
 
+  # --------------------------------------------------------------- frontend
+  frontend:
+    build: ./frontend
+    env_file: .env
+    environment:
+      PORT: ${FRONTEND_PORT}
+    restart: unless-stopped
+    networks: [bookly]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${FRONTEND_PORT}/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   # ---------------------------------------------------------------- gateway
   api-gateway:
     build: ./api-gateway
@@ -119,6 +133,7 @@ services:
       seat-service: { condition: service_healthy }
       booking-service: { condition: service_healthy }
       notification-service: { condition: service_healthy }
+      frontend: { condition: service_healthy }
 
 networks:
   bookly:

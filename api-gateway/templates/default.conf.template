@@ -33,6 +33,11 @@ upstream notification_service {
     keepalive 16;
 }
 
+upstream frontend {
+    server frontend:${FRONTEND_PORT};
+    keepalive 16;
+}
+
 upstream seat_service_grpc {
     server seat-service:${SEAT_SERVICE_PORT};
 }
@@ -137,6 +142,19 @@ server {
     location /api/ {
         default_type application/json;
         return 404 '{"error":{"status":404,"message":"No API route matches this path"}}';
+    }
+
+    # ---------- frontend (Next.js) ----------
+    # Hashed build assets never change, so browsers may cache them forever.
+    location /_next/static/ {
+        include /etc/nginx/snippets/proxy-common.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        proxy_pass http://frontend;
+    }
+
+    location / {
+        include /etc/nginx/snippets/proxy-common.conf;
+        proxy_pass http://frontend;
     }
 
     # ---------- Named error locations ----------

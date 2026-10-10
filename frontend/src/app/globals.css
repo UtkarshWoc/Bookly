@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Bookly design tokens — "box office": ticket paper, navy ink,
+   marigold for anything you are holding, teal for what is open.
+   ------------------------------------------------------------------ */
+@theme {
+  --color-paper: #eef0f6;
+  --color-card: #ffffff;
+  --color-ink: #16213e;
+  --color-ink-soft: #5e6787;
+  --color-line: #d5d9e6;
+  --color-marigold: #e8a23a;
+  --color-marigold-soft: #fbebd0;
+  --color-marigold-deep: #9a5f0c;
+  --color-teal: #18806f;
+  --color-teal-soft: #d5eee9;
+  --color-rose: #c8423b;
+  --color-rose-soft: #f7dedc;
+  --color-sold: #a3abc0;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-marigold);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--color-marigold-soft);
+}
+
+@layer components {
+  /* ---------- Ticket stub ----------
+     Two half-masks punch a semicircular notch top and bottom at --stub-x,
+     and a dashed perforation runs between them. */
+  .ticket {
+    --notch: 13px;
+    --stub-x: 72%;
+    position: relative;
+    background: var(--color-card);
+    border-radius: 18px;
+    -webkit-mask:
+      radial-gradient(circle var(--notch) at var(--stub-x) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--notch) at var(--stub-x) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+    mask:
+      radial-gradient(circle var(--notch) at var(--stub-x) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--notch) at var(--stub-x) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+  }
+
+  .ticket-perforation {
+    position: absolute;
+    top: calc(var(--notch) + 6px);
+    bottom: calc(var(--notch) + 6px);
+    left: var(--stub-x);
+    border-left: 2px dashed var(--color-line);
+  }
+
+  /* Vertical variant (notches on the sides) for narrow screens and confirmations. */
+  .ticket-vertical {
+    --stub-y: 68%;
+    -webkit-mask:
+      radial-gradient(circle var(--notch) at 0 var(--stub-y), #0000 98%, #000) left / 51% 100% no-repeat,
+      radial-gradient(circle var(--notch) at 100% var(--stub-y), #0000 98%, #000) right / 51% 100% no-repeat;
+    mask:
+      radial-gradient(circle var(--notch) at 0 var(--stub-y), #0000 98%, #000) left / 51% 100% no-repeat,
+      radial-gradient(circle var(--notch) at 100% var(--stub-y), #0000 98%, #000) right / 51% 100% no-repeat;
+  }
+
+  .ticket-vertical .ticket-perforation {
+    top: var(--stub-y);
+    bottom: auto;
+    left: calc(var(--notch) + 6px);
+    right: calc(var(--notch) + 6px);
+    border-left: 0;
+    border-top: 2px dashed var(--color-line);
+  }
+
+  /* Seats held by other people: a diagonal hatch reads as "taken for now". */
+  .seat-held {
+    background: repeating-linear-gradient(135deg, var(--color-marigold-soft) 0 4px, #fff 4px 8px);
+    border-color: var(--color-marigold);
+  }
+}
+
+.hold-bar {
+  transition: width 1s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
