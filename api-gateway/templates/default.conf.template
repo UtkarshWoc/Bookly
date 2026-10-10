@@ -7,6 +7,7 @@ uninitialized_variable_warn off;
 
 # ---------- Rate limiting ----------
 limit_req_zone $binary_remote_addr zone=auth_login:10m rate=${LOGIN_RATE_LIMIT};
+limit_req_zone $binary_remote_addr zone=api_general:10m rate=${API_RATE_LIMIT};
 limit_req_status 429;
 
 # ---------- Upstreams ----------
@@ -17,6 +18,18 @@ upstream auth_service {
 
 upstream event_service {
     server event-service:${EVENT_SERVICE_PORT};
+    keepalive 16;
+}
+
+# Load balancing: the "booking-service" DNS name resolves to every replica,
+# so nginx round-robins between them; a failing replica is skipped for 10s.
+upstream booking_service {
+    server booking-service:${BOOKING_SERVICE_PORT} max_fails=3 fail_timeout=10s;
+    keepalive 16;
+}
+
+upstream notification_service {
+    server notification-service:${NOTIFICATION_SERVICE_PORT};
     keepalive 16;
 }
 
@@ -89,6 +102,30 @@ server {
         include /etc/nginx/snippets/auth-required.conf;
         include /etc/nginx/snippets/proxy-common.conf;
         proxy_pass http://event_service/admin/;
+    }
+
+    # ---------- booking-service (JWT required, load balanced) ----------
+    location /api/bookings {
+        limit_req zone=api_general burst=20 nodelay;
+        include /etc/nginx/snippets/auth-required.conf;
+        include /etc/nginx/snippets/proxy-common.conf;
+        add_header X-Upstream-Addr $upstream_addr always;
+        proxy_pass http://booking_service/bookings;
+    }
+
+    # Public, real-time seat map (REST facade over gRPC GetSeatMap). Never cached.
+    location /api/availability/ {
+        limit_req zone=api_general burst=20 nodelay;
+        include /etc/nginx/snippets/proxy-common.conf;
+        add_header X-Upstream-Addr $upstream_addr always;
+        proxy_pass http://booking_service/availability/;
+    }
+
+    # ---------- notification-service (JWT required) ----------
+    location /api/notifications {
+        include /etc/nginx/snippets/auth-required.conf;
+        include /etc/nginx/snippets/proxy-common.conf;
+        proxy_pass http://notification_service/notifications;
     }
 
     # ---------- Gateway ----------
