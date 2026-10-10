@@ -24,6 +24,9 @@ upstream event_service {
 # Load balancing: the "booking-service" DNS name resolves to every replica,
 # so nginx round-robins between them; a failing replica is skipped for 10s.
 upstream booking_service {
+    # Shared-memory zone: round-robin state is shared by all nginx worker processes.
+    # Without it each worker keeps its own counter and new connections pile onto one replica.
+    zone booking_service 64k;
     server booking-service:${BOOKING_SERVICE_PORT} max_fails=3 fail_timeout=10s;
     keepalive 16;
 }

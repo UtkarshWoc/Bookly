@@ -403,7 +403,8 @@ docker compose start seat-service
 ```
 
 ```bash
-docker compose up -d --scale booking-service=3      # nginx spreads load across 3 replicas
+docker compose up -d --scale booking-service=3      # start a third replica
+docker compose restart api-gateway                  # nginx resolves upstreams at startup, so reload it
 docker compose logs -f notification-service         # watch "[email -> user …]" lines as you book
 ```
 
