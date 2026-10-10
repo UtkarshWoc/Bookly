@@ -1,0 +1,63 @@
+# Bookly — every value comes from the single root .env
+# (compose uses it for ${VAR} interpolation and as each service's env_file).
+
+x-node-service: &node-service
+  env_file: .env
+  restart: unless-stopped
+  networks: [bookly]
+
+services:
+  # ------------------------------------------------------------------ infra
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes: [mongo-data:/data/db]
+    networks: [bookly]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis-data:/data]
+    networks: [bookly]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # --------------------------------------------------------------- services
+  auth-service:
+    <<: *node-service
+    build: ./services/auth-service
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${AUTH_SERVICE_PORT}/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ---------------------------------------------------------------- gateway
+  api-gateway:
+    build: ./api-gateway
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT}:80"
+    networks: [bookly]
+    depends_on:
+      auth-service: { condition: service_healthy }
+
+networks:
+  bookly:
+
+volumes:
+  mongo-data:
+  redis-data:

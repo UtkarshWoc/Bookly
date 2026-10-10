@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment — only .env.example is committed
+.env
+.env.local
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# Logs & OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Tooling
+graphify-out/
