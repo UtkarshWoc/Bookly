@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const config = require('../config');
 const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
@@ -11,11 +12,15 @@ async function register({ name, email, password }) {
   return { user: user.toJSON(), ...tokenService.issue(user) };
 }
 
+// Compared against when the email is unknown, so response time does not reveal which accounts exist.
+const DUMMY_HASH = bcrypt.hashSync('timing-equalizer', config.bcryptRounds);
+
 async function login({ email, password }) {
   const user = await User.findOne({ email }).select('+passwordHash');
-  if (!user || !(await user.comparePassword(password))) {
-    throw ApiError.unauthorized('Invalid email or password');
-  }
+  const valid = user
+    ? await user.comparePassword(password)
+    : await bcrypt.compare(password, DUMMY_HASH).then(() => false);
+  if (!valid) throw ApiError.unauthorized('Invalid email or password');
   return { user: user.toJSON(), ...tokenService.issue(user) };
 }
 

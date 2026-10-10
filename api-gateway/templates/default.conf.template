@@ -15,6 +15,15 @@ upstream auth_service {
     keepalive 16;
 }
 
+upstream event_service {
+    server event-service:${EVENT_SERVICE_PORT};
+    keepalive 16;
+}
+
+# ---------- Response cache (public event catalog) ----------
+proxy_cache_path /var/cache/nginx/events levels=1:2 keys_zone=events_cache:10m
+                 max_size=100m inactive=60s use_temp_path=off;
+
 server {
     listen 80;
     server_name _;
@@ -43,15 +52,39 @@ server {
     }
 
     # ---------- auth-service ----------
-    location = /api/auth/login {
+    # Credential endpoints are brute-force targets. The regex is case-insensitive
+    # and tolerates trailing slashes so no path variant can skip the limiter.
+    location ~* ^/api/auth/+(login|register)/*$ {
         limit_req zone=auth_login burst=${LOGIN_RATE_BURST} nodelay;
         include /etc/nginx/snippets/proxy-common.conf;
-        proxy_pass http://auth_service/login;
+        proxy_pass http://auth_service/$1;
     }
 
     location /api/auth/ {
         include /etc/nginx/snippets/proxy-common.conf;
         proxy_pass http://auth_service/;
+    }
+
+    # ---------- event-service: public catalog (read-only, cached) ----------
+    # Layer 1 of 3: nginx proxy_cache -> Redis cache-aside -> MongoDB.
+    location /api/events {
+        limit_except GET HEAD { deny all; }
+        proxy_cache events_cache;
+        proxy_cache_key $request_method$request_uri;
+        proxy_cache_valid 200 ${GATEWAY_EVENTS_CACHE_SECONDS}s;
+        proxy_cache_lock on;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+        add_header X-Gateway-Cache $upstream_cache_status always;
+        include /etc/nginx/snippets/proxy-common.conf;
+        proxy_pass http://event_service/events;
+    }
+
+    # ---------- event-service: admin writes (JWT + admin role) ----------
+    location /api/admin/ {
+        include /etc/nginx/snippets/auth-required.conf;
+        include /etc/nginx/snippets/proxy-common.conf;
+        proxy_pass http://event_service/admin/;
     }
 
     # ---------- Gateway ----------
