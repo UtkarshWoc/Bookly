@@ -24,9 +24,16 @@ const MODES = {
   },
 };
 
-// Only allow same-site relative redirects after sign-in.
+// Only allow same-origin redirects after sign-in. Resolving with URL catches
+// tricks like "//evil.com" and "/\evil.com" that browsers treat as other hosts.
 function safeNext(value) {
-  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/';
+  if (!value || !value.startsWith('/') || typeof window === 'undefined') return '/';
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin ? `${url.pathname}${url.search}${url.hash}` : '/';
+  } catch {
+    return '/';
+  }
 }
 
 export default function AuthForm({ mode }) {
