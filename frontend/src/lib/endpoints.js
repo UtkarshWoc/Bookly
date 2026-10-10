@@ -15,7 +15,7 @@ export const SERVICES = [
       {
         method: 'POST', path: '/auth/login', access: 'public',
         description: 'Exchange email and password for a JWT. Limited to 5 requests per minute per IP.',
-        body: { email: 'admin@bookly.dev', password: 'Admin@12345' },
+        body: { email: 'you@example.com', password: '<your password>' },
       },
       { method: 'GET', path: '/auth/me', access: 'user', description: 'The profile behind the current token.' },
       {
