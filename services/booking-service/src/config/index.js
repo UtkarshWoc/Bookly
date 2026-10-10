@@ -44,6 +44,7 @@ module.exports = Object.freeze({
   },
   idempotencyTtlSeconds: Number(process.env.IDEMPOTENCY_TTL_SECONDS || 86400),
   maxSeatsPerBooking: Number(process.env.MAX_SEATS_PER_BOOKING || 8),
+  maxActiveHolds: Number(process.env.MAX_ACTIVE_HOLDS_PER_USER || 3),
   payment: {
     latencyMs: Number(process.env.PAYMENT_LATENCY_MS || 700),
     declineCard: process.env.PAYMENT_DECLINE_CARD || '4000000000000002',

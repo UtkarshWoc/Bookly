@@ -1,4 +1,5 @@
 const { isValidObjectId } = require('mongoose');
+const config = require('../config');
 const Booking = require('../models/booking.model');
 const seatClient = require('../clients/seat.client');
 const eventClient = require('../clients/event.client');
@@ -46,8 +47,29 @@ async function findOwned(userId, bookingId) {
   return expireIfStale(booking);
 }
 
+// Stops one account from locking up a venue by stacking holds.
+async function assertWithinHoldLimits(userId, eventId, seats) {
+  const active = await Booking.find({
+    userId, status: 'PENDING', holdExpiresAt: { $gt: new Date() },
+  }).select('eventId seats');
+
+  if (active.length >= config.maxActiveHolds) {
+    throw ApiError.tooManyRequests(
+      `You already have ${active.length} unpaid holds. Pay for or release one before holding more seats.`,
+    );
+  }
+  const heldForEvent = active.filter((b) => b.eventId === eventId).reduce((n, b) => n + b.seats.length, 0);
+  if (heldForEvent + seats.length > config.maxSeatsPerBooking) {
+    throw ApiError.tooManyRequests(
+      `You can hold at most ${config.maxSeatsPerBooking} seats per event at a time (you are holding ${heldForEvent}).`,
+    );
+  }
+}
+
 // Step 1: validate against the catalog and hold the seats (gRPC LockSeats).
 async function createHold(userId, { eventId, seats }) {
+  await assertWithinHoldLimits(userId, eventId, seats);
+
   const event = await eventClient.getEvent(eventId);
   if (!event) throw ApiError.notFound('Event not found');
   if (new Date(event.startsAt) <= new Date()) throw ApiError.badRequest('This event has already started');

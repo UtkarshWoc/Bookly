@@ -5,6 +5,13 @@ const ApiError = require('../utils/ApiError');
 
 const KEY_PATTERN = /^[A-Za-z0-9_-]{8,100}$/;
 
+// Card numbers have too little entropy to hash safely, so card data never feeds
+// the fingerprint that is stored in Redis (only the last 4 digits do).
+function redactForFingerprint(body = {}) {
+  const { cardNumber, cvc, ...rest } = body ?? {};
+  return cardNumber ? { ...rest, cardLast4: String(cardNumber).slice(-4) } : rest;
+}
+
 /**
  * Makes a mutating endpoint safe to retry via the `Idempotency-Key` header.
  *
@@ -25,7 +32,7 @@ function idempotency(req, res, next) {
   }
 
   const redisKey = `idem:${req.user.id}:${req.method}:${req.baseUrl}${req.path}:${key}`;
-  const fingerprint = crypto.createHash('sha256').update(JSON.stringify(req.body ?? {})).digest('hex');
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify(redactForFingerprint(req.body))).digest('hex');
   const ttl = config.idempotencyTtlSeconds;
 
   (async () => {
