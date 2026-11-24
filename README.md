@@ -1,6 +1,6 @@
 # Bookly 🎟️
 
-**Event ticket booking built as loosely coupled microservices.** Browse events, pick the exact seats you want on a live seat map, hold them for five minutes, pay, and get a ticket. Under the hood the project uses an nginx API gateway, REST and gRPC, Redis in four different roles, and per-service MongoDB databases.
+**Event ticket booking built as loosely coupled microservices.** Browse events, pick the exact seats you want on a live seat map, hold them for five minutes, pay, and get a ticket. Under the hood the project uses an nginx API gateway, REST and gRPC, Redis in five different roles, and per-service MongoDB databases.
 
 ![stack](https://img.shields.io/badge/gateway-nginx-009639) ![stack](https://img.shields.io/badge/services-Node.js%20%2B%20Express-339933) ![stack](https://img.shields.io/badge/RPC-gRPC-244c5a) ![stack](https://img.shields.io/badge/cache%20%2F%20locks-Redis-dc382d) ![stack](https://img.shields.io/badge/DB-MongoDB-47a248) ![stack](https://img.shields.io/badge/frontend-Next.js-000000)
 
@@ -18,8 +18,9 @@
 8. [Configuration (`.env`)](#configuration-env)
 9. [Testing](#testing)
 10. [Local development without Docker](#local-development-without-docker)
-11. [Design decisions and trade-offs](#design-decisions-and-trade-offs)
-12. [Troubleshooting](#troubleshooting)
+11. [Deployment](#deployment)
+12. [Design decisions and trade-offs](#design-decisions-and-trade-offs)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -491,6 +492,20 @@ Each service is a plain Node app that reads the root `.env`.
 4. Run the frontend: `cd frontend && npm install && npm run dev`. It proxies `/api/*` to `API_GATEWAY_URL`.
 
 The gateway's features (`auth_request`, caching, rate limits) only exist in nginx. So for the full experience, keep using `docker compose up` and rebuild a single service with `docker compose up -d --build booking-service`.
+
+---
+
+## Deployment
+
+For a production deployment checklist and runbook, see [`DEPLOY.md`](DEPLOY.md).
+
+### Production prerequisites
+
+- **Managed MongoDB**: MongoDB Atlas or self-hosted replica set with per-service databases and user access controls.
+- **Managed Redis**: Redis 6+ (e.g. AWS ElastiCache, Redis Cloud) supporting databases 0–4 and Pub/Sub.
+- **Container orchestration**: ECS, Kubernetes, Cloud Run, Nomad, or Docker Compose with restart policies.
+- **Secrets manager**: AWS Secrets Manager, HashiCorp Vault, or cloud provider secret stores for `JWT_SECRET`, database URIs, and credentials.
+- **DNS and TLS reverse proxy**: Cloudflare, ALB, Traefik, or edge reverse proxy terminating TLS on port 443 in front of the gateway.
 
 ---
 
