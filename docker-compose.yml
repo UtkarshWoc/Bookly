@@ -127,6 +127,11 @@ services:
       # Dev-only gRPC proxy to seat-service (grpcurl / race test). Loopback only, never public.
       - "${GRPC_GATEWAY_HOST:-127.0.0.1}:${GRPC_GATEWAY_PORT:-9090}:9090"
     networks: [bookly]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     depends_on:
       auth-service: { condition: service_healthy }
       event-service: { condition: service_healthy }
