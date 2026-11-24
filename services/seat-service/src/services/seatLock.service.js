@@ -78,15 +78,15 @@ async function confirmSeats({ eventId, seatNos, userId, bookingId }) {
 }
 
 async function getSeatMap({ eventId }) {
-  const lockedSeats = [];
+  const locked = new Set();
   const stream = redis.scanStream({ match: lockKey(eventId, '*'), count: 200 });
   for await (const keys of stream) {
-    keys.forEach((key) => lockedSeats.push(key.slice(key.lastIndexOf(':') + 1)));
+    keys.forEach((key) => locked.add(key.slice(key.lastIndexOf(':') + 1)));
   }
   const bookedSeats = await BookedSeat.find({ eventId }).distinct('seatNo');
   const booked = new Set(bookedSeats);
   return {
-    lockedSeats: lockedSeats.filter((s) => !booked.has(s)),
+    lockedSeats: [...locked].filter((s) => !booked.has(s)),
     bookedSeats,
     lockTtlSeconds: config.lockTtlSeconds,
   };
