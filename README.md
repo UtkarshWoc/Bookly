@@ -418,6 +418,8 @@ There is **one** `.env` at the repository root. Docker Compose reads it for `${V
 
 ### End-to-end smoke test (24 checks)
 
+Run from the repository root:
+
 ```bash
 node scripts/smoke-test.js            # default http://localhost:8080
 ```
@@ -434,22 +436,36 @@ It covers:
 - round-robin across both booking replicas
 - Pub/Sub notifications
 
-It picks free seats on its own, so you can rerun it at any time.
+It picks free seats on its own, so you can rerun it at any time. Expected output ends with:
+`All 24 checks passed.`
 
 ### Double-booking race test
+
+Run from `scripts/seat-race`:
 
 ```bash
 cd scripts/seat-race && npm install
 node race.js 50          # 50 users race for one seat through nginx grpc_pass
 ```
 
-Expected output: `winners: 1, rejected: 49 … PASS`.
+Expected output:
+
+```text
+  winners : 1 (racer-0, hold 300s)
+  rejected: 49
+  errors  : 0
+  elapsed : 45ms
+
+PASS — exactly one user acquired the seat (lock released afterwards).
+```
 
 ### Try the resilience yourself
 
+Run from the repository root:
+
 ```bash
 docker compose stop seat-service
-curl -i localhost:8080/api/availability/<eventId>   # retries with backoff, then a clean 503
+curl -i http://localhost:8080/api/availability/<eventId>   # retries with backoff, then a clean 503
 docker compose start seat-service
 ```
 
