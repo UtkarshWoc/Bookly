@@ -224,43 +224,49 @@ The **API explorer** at `/explorer` lets you call each of these from the browser
 
 ### auth-service
 
-| Method | Path | Access | Description |
-| --- | --- | --- | --- |
-| POST | `/auth/register` | Public | `{ name, email, password }` → `{ user, token, expiresAt }` (rate limited) |
-| POST | `/auth/login` | Public | `{ email, password }` → `{ user, token, expiresAt }` (5/min per IP) |
-| GET | `/auth/me` | User | Current profile |
-| GET | `/auth/verify` | User | Used by nginx; returns `X-User-Id`, `X-User-Role` headers |
-| POST | `/auth/logout` | User | Blacklists the token until it expires |
+| Method | Path | Access | Status | Description |
+| --- | --- | --- | --- | --- |
+| POST | `/auth/register` | Public | 201 | `{ name, email, password }` → `{ user, token, expiresAt }` (rate limited) |
+| POST | `/auth/login` | Public | 200 | `{ email, password }` → `{ user, token, expiresAt }` (5/min per IP) |
+| GET | `/auth/me` | User | 200 | Current profile `{ user }` |
+| GET | `/auth/verify` | User | 200 | Used by nginx; returns `X-User-Id`, `X-User-Role` headers |
+| POST | `/auth/logout` | User | 200 | Blacklists the token in Redis until it expires: `{ message, revokedForSeconds }` |
 
 ### event-service
 
-| Method | Path | Access | Description |
-| --- | --- | --- | --- |
-| GET | `/events` | Public | Query: `q, category, city, upcoming (true), page, limit (≤50)` → `{ data, pagination }` |
-| GET | `/events/categories` | Public | `{ categories }` |
-| GET | `/events/:id` | Public | `{ event }` + `X-Cache`, `X-Gateway-Cache` headers |
-| POST | `/admin/events` | Admin | Create: `{ title, description, category, venue, city, startsAt, price, currency, layout: { rows, seatsPerRow } }` |
-| PATCH | `/admin/events/:id` | Admin | Partial update; invalidates Redis cache |
-| DELETE | `/admin/events/:id` | Admin | Delete (204) |
+| Method | Path | Access | Status | Description |
+| --- | --- | --- | --- | --- |
+| GET | `/events` | Public | 200 | Query: `q, category, city, upcoming (true), page, limit (≤50)` → `{ data, pagination }` |
+| GET | `/events/categories` | Public | 200 | List available categories: `{ categories }` |
+| GET | `/events/:id` | Public | 200 | `{ event }` + `X-Cache` (Redis), `X-Gateway-Cache` (nginx) headers |
+| POST | `/admin/events` | Admin | 201 | Create event: `{ title, description, category, venue, city, startsAt, price, currency, layout: { rows, seatsPerRow } }` |
+| PATCH | `/admin/events/:id` | Admin | 200 | Partial update; invalidates Redis cache: `{ event }` |
+| DELETE | `/admin/events/:id` | Admin | 204 | Delete event (empty body) |
 
 ### booking-service
 
-| Method | Path | Access | Description |
-| --- | --- | --- | --- |
-| GET | `/availability/:eventId` | Public | `{ lockedSeats, bookedSeats, lockTtlSeconds }`, never cached |
-| GET | `/bookings` | User | Your bookings |
-| POST | `/bookings` | User | Hold seats: `{ eventId, seats: ["A1","A2"] }` → 201 `PENDING`. Supports `Idempotency-Key` |
-| GET | `/bookings/:id` | User | One booking (only your own) |
-| POST | `/bookings/:id/pay` | User | `{ cardHolder, cardNumber, expiry: "MM/YY", cvc }` → `CONFIRMED`, or 402 if declined. Supports `Idempotency-Key` |
-| POST | `/bookings/:id/cancel` | User | Release a pending hold |
+| Method | Path | Access | Status | Description |
+| --- | --- | --- | --- | --- |
+| GET | `/availability/:eventId` | Public | 200 | `{ eventId, lockedSeats, bookedSeats, lockTtlSeconds }`, never cached |
+| GET | `/bookings` | User | 200 | Your bookings: `{ data }` |
+| POST | `/bookings` | User | 201 | Hold seats: `{ eventId, seats: ["A1","A2"] }` → `PENDING`. Supports `Idempotency-Key` |
+| GET | `/bookings/:id` | User | 200 | One booking: `{ booking }` (only your own, 404 otherwise) |
+| POST | `/bookings/:id/pay` | User | 200 / 402 | `{ cardHolder, cardNumber, expiry: "MM/YY", cvc }` → `CONFIRMED`, or 402 if declined. Supports `Idempotency-Key` |
+| POST | `/bookings/:id/cancel` | User | 200 | Release a pending hold: `{ booking }`. Supports `Idempotency-Key` |
 
 ### notification-service
 
-| Method | Path | Access | Description |
-| --- | --- | --- | --- |
-| GET | `/notifications` | User | `{ data, unread }` |
-| POST | `/notifications/read-all` | User | Mark all read |
-| PATCH | `/notifications/:id/read` | User | Mark one read |
+| Method | Path | Access | Status | Description |
+| --- | --- | --- | --- | --- |
+| GET | `/notifications` | User | 200 | `{ data, unread }` |
+| POST | `/notifications/read-all` | User | 200 | Mark all read: `{ updated }` |
+| PATCH | `/notifications/:id/read` | User | 200 | Mark one read: `{ notification }` |
+
+### api-gateway
+
+| Method | Path | Access | Status | Description |
+| --- | --- | --- | --- | --- |
+| GET | `/health` | Public | 200 | Gateway liveness probe: `{"service":"api-gateway","status":"ok"}` |
 
 ### Errors
 
