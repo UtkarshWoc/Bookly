@@ -5,7 +5,9 @@ FROM nginx:1.27-alpine
 #  $variables are left untouched) and written to /etc/nginx/conf.d.
 COPY templates /etc/nginx/templates
 COPY snippets /etc/nginx/snippets
+COPY docker-entrypoint.d /docker-entrypoint.d
 
-RUN mkdir -p /var/cache/nginx/events
+RUN chmod +x /docker-entrypoint.d/*.sh && \
+    mkdir -p /var/cache/nginx/events
 
 EXPOSE 80 9090
