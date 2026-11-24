@@ -33,7 +33,15 @@ async function api(method, path, { token, body, headers = {} } = {}) {
     body: body && JSON.stringify(body),
   });
   const text = await res.text();
-  return { status: res.status, headers: res.headers, body: text ? JSON.parse(text) : null };
+  let parsed = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = { raw: text };
+    }
+  }
+  return { status: res.status, headers: res.headers, body: parsed };
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
