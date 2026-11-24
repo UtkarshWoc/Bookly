@@ -2,6 +2,7 @@
 // (or the Next.js dev rewrite) routes it to the owning service.
 
 const SESSION_KEY = 'bookly.session';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export class ApiError extends Error {
   constructor(status, message, details) {
@@ -48,7 +49,7 @@ function parse(text) {
 export async function rawRequest(path, { method = 'GET', body, headers = {}, auth = true } = {}) {
   const token = auth ? readSession()?.token : null;
   const started = performance.now();
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
       ...(body !== undefined && { 'Content-Type': 'application/json' }),
