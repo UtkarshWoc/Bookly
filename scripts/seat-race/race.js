@@ -14,7 +14,7 @@ const protoLoader = require('@grpc/proto-loader');
 
 const CONCURRENCY = Number(process.argv[2] || 50);
 const SEAT = process.argv[3] || 'Z9';
-const ADDRESS = process.env.SEAT_GRPC_ADDR || `127.0.0.1:${process.env.GRPC_GATEWAY_PORT || 9090}`;
+const ADDRESS = process.env.SEAT_GRPC_ADDR || `${process.env.GRPC_GATEWAY_HOST || '127.0.0.1'}:${process.env.GRPC_GATEWAY_PORT || 9090}`;
 const EVENT_ID = `race-${Date.now()}`;
 
 const definition = protoLoader.loadSync(path.resolve(__dirname, '../../proto/seat.proto'), {
