@@ -4,6 +4,7 @@ node_modules/
 # Environment — only .env.example is committed
 .env
 .env.local
+.env.*.local
 
 # Build output
 .next/
