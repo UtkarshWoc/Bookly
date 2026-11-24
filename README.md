@@ -43,6 +43,8 @@ docker compose up -d --build  # first build takes a few minutes
 
 **Demo accounts and cards**
 
+These credentials and test cards are documented development defaults. `ADMIN_PASSWORD` and `JWT_SECRET` must be changed before running anywhere other than a local development machine.
+
 | | |
 | --- | --- |
 | Admin login | `admin@bookly.dev` / `Admin@12345` (from `.env`, created on first start) |
@@ -124,16 +126,15 @@ flowchart TB
 
 The config is a **template**. nginx's entrypoint fills in ports, rate limits and cache TTLs from the same root `.env` with `envsubst`.
 
-### Redis: four different jobs
+### Redis: five different roles
 
-| # | Job | Where | Keys |
-| --- | --- | --- | --- |
-| 1 | **Cache-aside** for event detail | event-service | `event:{id}` with TTL. Deleted on admin update/delete. Exposed as the `X-Cache: HIT/MISS` header |
-| 2 | **Distributed seat lock** | seat-service | `SET seat:{eventId}:{seatNo} {userId} NX EX 300`. Two users can't hold the same seat, and abandoned holds expire on their own. Release is a Lua compare-and-delete so you can only free your own lock |
-| 3 | **JWT blacklist** (logout) | auth-service | `jwt:blacklist:{jti}` with TTL equal to the token's remaining lifetime |
-| 4 | **Idempotency keys** | booking-service | `idem:{user}:{route}:{key}`, so a retried `POST /bookings` or `/pay` replays the first response instead of creating a duplicate or charging twice. Shared by both replicas |
-
-Bonus: **Pub/Sub**. booking-service publishes `booking.confirmed / failed / cancelled` on `bookly.bookings`, and notification-service consumes them.
+| # | Database | Job | Where | Keys / Channels |
+| --- | --- | --- | --- | --- |
+| 1 | db0 | **JWT blacklist** (logout) | auth-service | `jwt:blacklist:{jti}` with TTL equal to the token's remaining lifetime |
+| 2 | db1 | **Cache-aside** for event detail | event-service | `event:{id}` with TTL. Deleted on admin update/delete. Exposed as the `X-Cache: HIT/MISS` header |
+| 3 | db2 | **Distributed seat lock** | seat-service | `SET seat:{eventId}:{seatNo} {userId} NX EX 300`. Two users can't hold the same seat, and abandoned holds expire on their own. Release is a Lua compare-and-delete so you can only free your own lock |
+| 4 | db3 | **Idempotency keys** | booking-service | `idem:{user}:{route}:{key}`, so a retried `POST /bookings` or `/pay` replays the first response instead of creating a duplicate or charging twice. Shared by both replicas |
+| 5 | db4 | **Pub/Sub event bus** | notification-service | Subscribes to channel `bookly.bookings` for domain events (`booking.confirmed / failed / cancelled`) |
 
 ### gRPC ([`proto/seat.proto`](proto/seat.proto))
 
@@ -348,16 +349,60 @@ frontend/src/
 
 There is **one** `.env` at the repository root. Docker Compose reads it for `${VAR}` interpolation and passes it to every container as its `env_file`. nginx renders its config from it. When run outside Docker, each Node service and the Next.js config load the same file by path. `.env` is git-ignored; `.env.example` is the committed template.
 
-| Group | Variables |
-| --- | --- |
-| Gateway | `GATEWAY_PORT`, `GRPC_GATEWAY_PORT`, `LOGIN_RATE_LIMIT`, `LOGIN_RATE_BURST`, `API_RATE_LIMIT`, `GATEWAY_EVENTS_CACHE_SECONDS` |
-| Infra | `MONGO_URI`, `MONGO_PORT`, `REDIS_PORT` |
-| auth-service | `AUTH_SERVICE_PORT`, `AUTH_DB_NAME`, `AUTH_REDIS_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `BCRYPT_ROUNDS`, `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` |
-| event-service | `EVENT_SERVICE_PORT`, `EVENT_DB_NAME`, `EVENT_REDIS_URL`, `EVENT_CACHE_TTL_SECONDS`, `SEED_EVENTS` |
-| seat-service | `SEAT_SERVICE_PORT`, `SEAT_DB_NAME`, `SEAT_REDIS_URL`, `SEAT_LOCK_TTL_SECONDS` |
-| booking-service | `BOOKING_SERVICE_PORT`, `BOOKING_REPLICAS`, `BOOKING_DB_NAME`, `BOOKING_REDIS_URL`, `SEAT_SERVICE_ADDR`, `EVENT_SERVICE_URL`, `EVENT_SERVICE_TIMEOUT_MS`, `GRPC_DEADLINE_MS`, `GRPC_MAX_RETRIES`, `IDEMPOTENCY_TTL_SECONDS`, `MAX_SEATS_PER_BOOKING`, `MAX_ACTIVE_HOLDS_PER_USER`, `PAYMENT_LATENCY_MS`, `PAYMENT_DECLINE_CARD` |
-| notification-service | `NOTIFICATION_SERVICE_PORT`, `NOTIFICATION_DB_NAME`, `NOTIFICATION_REDIS_URL`, `BOOKING_EVENTS_CHANNEL` |
-| frontend | `FRONTEND_PORT`, `API_GATEWAY_URL` (dev proxy target) |
+| Group | Variable | Default | Description |
+| --- | --- | --- | --- |
+| General | `COMPOSE_PROJECT_NAME` | `bookly` | Project prefix for containers and network |
+| General | `NODE_ENV` | `production` | Node environment |
+| General | `LOG_LEVEL` | `info` | Logger verbosity |
+| Gateway | `GATEWAY_PORT` | `8080` | Host port mapped to nginx port 80 |
+| Gateway | `GRPC_GATEWAY_HOST` | `127.0.0.1` | Loopback host bind for dev gRPC proxy |
+| Gateway | `GRPC_GATEWAY_PORT` | `9090` | Dev gRPC proxy port |
+| Gateway | `LOGIN_RATE_LIMIT` | `5r/m` | IP rate limit for /auth/login and /auth/register |
+| Gateway | `LOGIN_RATE_BURST` | `3` | Login rate limit burst allowance |
+| Gateway | `API_RATE_LIMIT` | `20r/s` | General API rate limit |
+| Gateway | `GATEWAY_EVENTS_CACHE_SECONDS` | `15` | Nginx reverse-proxy cache TTL for public events |
+| Infra | `MONGO_URI` | `mongodb://mongo:27017` | MongoDB connection URI |
+| Infra | `MONGO_PORT` | `27017` | MongoDB container port |
+| Infra | `REDIS_PORT` | `6379` | Redis container port |
+| auth-service | `AUTH_SERVICE_PORT` | `8001` | Service port |
+| auth-service | `AUTH_DB_NAME` | `bookly_auth` | Logical MongoDB database name |
+| auth-service | `AUTH_REDIS_URL` | `redis://redis:6379/0` | Redis database 0 (JWT blacklist) |
+| auth-service | `JWT_SECRET` | `replace-me-with-a-long-random-string` | Secret key for signing tokens |
+| auth-service | `JWT_EXPIRES_IN` | `1h` | Token validity duration |
+| auth-service | `BCRYPT_ROUNDS` | `10` | Password hash salt rounds |
+| auth-service | `ADMIN_NAME` | `Bookly Admin` | Bootstrap admin display name |
+| auth-service | `ADMIN_EMAIL` | `admin@bookly.dev` | Bootstrap admin email |
+| auth-service | `ADMIN_PASSWORD` | `Admin@12345` | Bootstrap admin password |
+| event-service | `EVENT_SERVICE_PORT` | `8002` | Service port |
+| event-service | `EVENT_DB_NAME` | `bookly_events` | Logical MongoDB database name |
+| event-service | `EVENT_REDIS_URL` | `redis://redis:6379/1` | Redis database 1 (cache-aside) |
+| event-service | `EVENT_CACHE_TTL_SECONDS` | `60` | Redis cache TTL for event detail |
+| event-service | `SEED_EVENTS` | `true` | Seed 8 demo events on startup |
+| seat-service | `SEAT_SERVICE_PORT` | `50051` | gRPC service port |
+| seat-service | `SEAT_DB_NAME` | `bookly_seats` | Logical MongoDB database name (booked seats) |
+| seat-service | `SEAT_REDIS_URL` | `redis://redis:6379/2` | Redis database 2 (distributed seat locks) |
+| seat-service | `SEAT_LOCK_TTL_SECONDS` | `300` | Temporary seat hold expiration (seconds) |
+| booking-service | `BOOKING_SERVICE_PORT` | `8003` | Service port |
+| booking-service | `BOOKING_REPLICAS` | `2` | Number of horizontally scaled replicas |
+| booking-service | `BOOKING_DB_NAME` | `bookly_bookings` | Logical MongoDB database name |
+| booking-service | `BOOKING_REDIS_URL` | `redis://redis:6379/3` | Redis database 3 (idempotency keys) |
+| booking-service | `SEAT_SERVICE_ADDR` | `seat-service:50051` | gRPC address of seat-service |
+| booking-service | `EVENT_SERVICE_URL` | `http://event-service:8002` | HTTP address of event-service |
+| booking-service | `EVENT_SERVICE_TIMEOUT_MS` | `2000` | HTTP request timeout for catalog calls |
+| booking-service | `GRPC_DEADLINE_MS` | `2000` | Deadline per gRPC call |
+| booking-service | `GRPC_MAX_RETRIES` | `2` | Exponential backoff retries for transient errors |
+| booking-service | `IDEMPOTENCY_TTL_SECONDS` | `86400` | Expiration for idempotency records |
+| booking-service | `MAX_SEATS_PER_BOOKING` | `8` | Max seats allowed per single booking |
+| booking-service | `MAX_ACTIVE_HOLDS_PER_USER` | `3` | Max active unpaid holds per user |
+| booking-service | `PAYMENT_LATENCY_MS` | `700` | Simulated payment processing latency |
+| booking-service | `PAYMENT_DECLINE_CARD` | `4000000000000002` | Card number that simulates a decline |
+| notification-service | `NOTIFICATION_SERVICE_PORT` | `8004` | Service port |
+| notification-service | `NOTIFICATION_DB_NAME` | `bookly_notifications` | Logical MongoDB database name |
+| notification-service | `NOTIFICATION_REDIS_URL` | `redis://redis:6379/4` | Redis database 4 (subscriber) |
+| Event bus | `BOOKING_EVENTS_CHANNEL` | `bookly.bookings` | Redis Pub/Sub topic for domain events |
+| frontend | `FRONTEND_PORT` | `3000` | Next.js server port |
+| frontend | `API_GATEWAY_URL` | `http://localhost:8080` | Dev proxy target used by npm run dev |
+| frontend | `NEXT_PUBLIC_API_URL` | `/api` | Browser-facing API base path |
 
 > ⚠️ Always change `JWT_SECRET` and `ADMIN_PASSWORD` before running anywhere other than your own machine.
 
