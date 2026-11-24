@@ -208,7 +208,7 @@ async function listForUser(userId) {
 async function getAvailability(eventId) {
   eventId = String(eventId).toLowerCase();
   const map = await seatClient.getSeatMap({ eventId });
-  return { eventId,lockedSeats: map.lockedSeats, bookedSeats: map.bookedSeats, lockTtlSeconds: map.lockTtlSeconds };
+  return { eventId, lockedSeats: map.lockedSeats, bookedSeats: map.bookedSeats, lockTtlSeconds: map.lockTtlSeconds };
 }
 
 module.exports = { createHold, pay, cancel, getById, listForUser, getAvailability };
