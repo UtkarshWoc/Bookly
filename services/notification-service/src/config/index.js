@@ -20,4 +20,7 @@ module.exports = Object.freeze({
   },
   redisUrl: required('NOTIFICATION_REDIS_URL'),
   bookingEventsChannel: process.env.BOOKING_EVENTS_CHANNEL || 'bookly.bookings',
+  bookingEventsStream: process.env.BOOKING_EVENTS_STREAM || 'bookly.bookings.stream',
+  consumerGroup: process.env.NOTIFICATION_CONSUMER_GROUP || 'notification-workers',
+  claimMinIdleMs: Number(process.env.NOTIFICATION_CLAIM_IDLE_MS || 30000),
 });

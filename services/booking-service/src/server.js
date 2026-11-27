@@ -1,6 +1,7 @@
 const config = require('./config');
 const app = require('./app');
 const redis = require('./config/redis');
+const eventRedis = require('./config/eventRedis');
 const seatClient = require('./clients/seat.client');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
 const { startExpirySweeper } = require('./services/booking.service');
@@ -17,7 +18,7 @@ async function start() {
     stopSweeper();
     server.close(async () => {
       seatClient.close();
-      await Promise.allSettled([disconnectDatabase(), redis.quit()]);
+      await Promise.allSettled([disconnectDatabase(), redis.quit(), eventRedis.quit()]);
       process.exit(0);
     });
   };

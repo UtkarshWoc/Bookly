@@ -1,11 +1,14 @@
+const crypto = require('crypto');
 const config = require('../config');
-const redis = require('../config/redis');
+const eventRedis = require('../config/eventRedis');
 const logger = require('../utils/logger');
 
-// Fire-and-forget domain events over Redis Pub/Sub. booking-service does not know
-// (or care) who listens — today it is notification-service.
+// Durable at-least-once domain events over Redis Streams (XADD).
+// Consumers read via consumer groups and acknowledge only after persisting.
 async function publish(type, booking) {
+  const eventId = booking?.id ? `${booking.id}:${type}` : crypto.randomUUID();
   const message = {
+    eventId,
     type,
     occurredAt: new Date().toISOString(),
     data: {
@@ -22,9 +25,21 @@ async function publish(type, booking) {
     },
   };
   try {
-    await redis.publish(config.bookingEventsChannel, JSON.stringify(message));
+    await eventRedis.xadd(
+      config.bookingEventsStream,
+      'MAXLEN',
+      '~',
+      '10000',
+      '*',
+      'eventId',
+      eventId,
+      'type',
+      type,
+      'payload',
+      JSON.stringify(message),
+    );
   } catch (err) {
-    logger.warn(`Failed to publish ${type}: ${err.message}`);
+    logger.warn(`Failed to publish ${type} to stream: ${err.message}`);
   }
 }
 

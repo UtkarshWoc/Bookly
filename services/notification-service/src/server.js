@@ -1,7 +1,7 @@
 const config = require('./config');
 const app = require('./app');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
-const { startBookingSubscriber, subscriber } = require('./subscribers/booking.subscriber');
+const { startBookingSubscriber, stopBookingSubscriber } = require('./subscribers/booking.subscriber');
 const logger = require('./utils/logger');
 
 async function start() {
@@ -13,7 +13,7 @@ async function start() {
   const shutdown = (signal) => {
     logger.info(`${signal} received, shutting down`);
     server.close(async () => {
-      await Promise.allSettled([disconnectDatabase(), subscriber.quit()]);
+      await Promise.allSettled([stopBookingSubscriber(), disconnectDatabase()]);
       process.exit(0);
     });
   };

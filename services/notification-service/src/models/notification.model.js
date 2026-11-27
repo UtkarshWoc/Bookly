@@ -10,6 +10,7 @@ const notificationSchema = new Schema(
     message: { type: String, required: true },
     bookingId: String,
     eventId: String,
+    eventKey: String,
     read: { type: Boolean, default: false },
   },
   {
@@ -26,6 +27,7 @@ const notificationSchema = new Schema(
 );
 
 notificationSchema.index({ userId: 1, createdAt: -1 });
+notificationSchema.index({ eventKey: 1 }, { unique: true, sparse: true });
 
 const Notification = model('Notification', notificationSchema);
 

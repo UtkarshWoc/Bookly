@@ -33,11 +33,23 @@ const fakeRedis = {
     published.push({ channel, msg: JSON.parse(msg) });
     return 1;
   },
+  async xadd(stream, ...args) {
+    const payloadIdx = args.indexOf('payload');
+    const msg = payloadIdx >= 0 ? JSON.parse(args[payloadIdx + 1]) : {};
+    published.push({ stream, msg });
+    return '1-0';
+  },
 };
 
 require.cache[require.resolve('../src/config/redis')] = {
   id: require.resolve('../src/config/redis'),
   filename: require.resolve('../src/config/redis'),
+  loaded: true,
+  exports: fakeRedis,
+};
+require.cache[require.resolve('../src/config/eventRedis')] = {
+  id: require.resolve('../src/config/eventRedis'),
+  filename: require.resolve('../src/config/eventRedis'),
   loaded: true,
   exports: fakeRedis,
 };

@@ -27,16 +27,33 @@ const TEMPLATES = {
 };
 
 // Turns a booking domain event into a stored notification (+ a simulated email in the logs).
-async function handleBookingEvent({ type, data }) {
+// Deduplicates by eventKey so at-least-once stream retries never create duplicate notifications.
+async function handleBookingEvent({ type, data, eventId }) {
   const template = TEMPLATES[type];
   if (!template || !data?.userId) return null;
 
+  const eventKey = eventId || (data.bookingId ? `${data.bookingId}:${type}` : undefined);
   const { title, message } = template(data);
-  const notification = await Notification.create({
-    userId: data.userId, type, title, message, bookingId: data.bookingId, eventId: data.eventId,
-  });
-  logger.info(`[email -> user ${data.userId}] ${title}: ${message}`);
-  return notification;
+
+  try {
+    const notification = await Notification.create({
+      userId: data.userId,
+      type,
+      title,
+      message,
+      bookingId: data.bookingId,
+      eventId: data.eventId,
+      ...(eventKey && { eventKey }),
+    });
+    logger.info(`[email -> user ${data.userId}] ${title}: ${message}`);
+    return notification;
+  } catch (err) {
+    if (err.code === 11000 && eventKey) {
+      logger.info(`Duplicate booking event ignored (${eventKey})`);
+      return null;
+    }
+    throw err;
+  }
 }
 
 async function listForUser(userId) {

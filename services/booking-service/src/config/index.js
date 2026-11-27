@@ -50,4 +50,7 @@ module.exports = Object.freeze({
     declineCard: process.env.PAYMENT_DECLINE_CARD || '4000000000000002',
   },
   bookingEventsChannel: process.env.BOOKING_EVENTS_CHANNEL || 'bookly.bookings',
+  bookingEventsStream: process.env.BOOKING_EVENTS_STREAM || 'bookly.bookings.stream',
+  bookingEventsRedisUrl:
+    process.env.BOOKING_EVENTS_REDIS_URL || process.env.NOTIFICATION_REDIS_URL || required('BOOKING_REDIS_URL'),
 });
