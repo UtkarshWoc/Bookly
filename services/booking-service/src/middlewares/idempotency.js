@@ -4,6 +4,7 @@ const redis = require('../config/redis');
 const ApiError = require('../utils/ApiError');
 
 const KEY_PATTERN = /^[A-Za-z0-9_-]{8,100}$/;
+const PROCESSING_TTL_SECONDS = 30;
 
 // Card numbers have too little entropy to hash safely, so card data never feeds
 // the fingerprint that is stored in Redis (only the last 4 digits do).
@@ -36,7 +37,13 @@ function idempotency(req, res, next) {
   const ttl = config.idempotencyTtlSeconds;
 
   (async () => {
-    const claimed = await redis.set(redisKey, JSON.stringify({ state: 'processing', fingerprint }), 'EX', ttl, 'NX');
+    const claimed = await redis.set(
+      redisKey,
+      JSON.stringify({ state: 'processing', fingerprint }),
+      'EX',
+      PROCESSING_TTL_SECONDS,
+      'NX',
+    );
 
     if (!claimed) {
       const record = JSON.parse((await redis.get(redisKey)) || 'null');
@@ -51,7 +58,8 @@ function idempotency(req, res, next) {
       return res.status(record.status).json(record.body);
     }
 
-    // Capture the eventual response so a retry can replay it.
+    // Persist the outcome before flushing bytes so an immediate client retry never
+    // observes the in-flight 'processing' state.
     const originalJson = res.json.bind(res);
     res.json = (body) => {
       // Only definitive outcomes are replayed (success, or a declined payment).
@@ -60,8 +68,8 @@ function idempotency(req, res, next) {
       const write = definitive
         ? redis.set(redisKey, JSON.stringify({ state: 'done', fingerprint, status: res.statusCode, body }), 'EX', ttl)
         : redis.del(redisKey);
-      write.catch(() => {});
-      return originalJson(body);
+      write.catch(() => {}).finally(() => originalJson(body));
+      return res;
     };
     next();
   })().catch(next);

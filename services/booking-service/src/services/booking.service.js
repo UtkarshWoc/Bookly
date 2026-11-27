@@ -208,7 +208,39 @@ async function listForUser(userId) {
 async function getAvailability(eventId) {
   eventId = String(eventId).toLowerCase();
   const map = await seatClient.getSeatMap({ eventId });
-  return { eventId, lockedSeats: map.lockedSeats, bookedSeats: map.bookedSeats, lockTtlSeconds: map.lockTtlSeconds };
+  return {
+    eventId,
+    lockedSeats: map.lockedSeats,
+    bookedSeats: map.bookedSeats,
+    lockTtlSeconds: map.lockTtlSeconds,
+    maxSeatsPerBooking: config.maxSeatsPerBooking,
+  };
 }
 
-module.exports = { createHold, pay, cancel, getById, listForUser, getAvailability };
+async function expireStaleHolds() {
+  const { modifiedCount } = await Booking.updateMany(
+    { status: 'PENDING', holdExpiresAt: { $lte: new Date() }, 'payment.status': { $ne: 'CAPTURED' } },
+    { $set: { status: 'EXPIRED', failureReason: 'Seat hold expired before payment' } },
+  );
+  if (modifiedCount > 0) logger.info(`Expired ${modifiedCount} stale booking hold(s)`);
+  return modifiedCount;
+}
+
+function startExpirySweeper(intervalMs = 60_000) {
+  const timer = setInterval(() => {
+    expireStaleHolds().catch((err) => logger.warn(`Hold expiry sweep failed: ${err.message}`));
+  }, intervalMs);
+  timer.unref();
+  return () => clearInterval(timer);
+}
+
+module.exports = {
+  createHold,
+  pay,
+  cancel,
+  getById,
+  listForUser,
+  getAvailability,
+  expireStaleHolds,
+  startExpirySweeper,
+};

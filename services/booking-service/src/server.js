@@ -3,15 +3,18 @@ const app = require('./app');
 const redis = require('./config/redis');
 const seatClient = require('./clients/seat.client');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
+const { startExpirySweeper } = require('./services/booking.service');
 const logger = require('./utils/logger');
 
 async function start() {
   await connectDatabase();
 
+  const stopSweeper = startExpirySweeper();
   const server = app.listen(config.port, () => logger.info(`Listening on :${config.port}`));
 
   const shutdown = (signal) => {
     logger.info(`${signal} received, shutting down`);
+    stopSweeper();
     server.close(async () => {
       seatClient.close();
       await Promise.allSettled([disconnectDatabase(), redis.quit()]);

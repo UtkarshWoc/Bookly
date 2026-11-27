@@ -6,20 +6,24 @@ const layoutSchema = z.object({
   seatsPerRow: z.coerce.number().int().min(1).max(40),
 });
 
-const createEventSchema = z.object({
+const baseEventSchema = z.object({
   title: z.string().trim().min(3).max(120),
   description: z.string().trim().max(2000).default(''),
   category: z.enum(CATEGORIES),
   venue: z.string().trim().min(2).max(120),
   city: z.string().trim().min(2).max(60),
-  startsAt: z.coerce.date().refine((d) => d.getTime() > Date.now(), 'Event must start in the future'),
+  startsAt: z.coerce.date(),
   price: z.coerce.number().min(0).max(1_000_000),
   currency: z.string().trim().length(3).toUpperCase().default('INR'),
   imageUrl: z.string().trim().url().or(z.literal('')).default(''),
   layout: layoutSchema,
 });
 
-const updateEventSchema = createEventSchema
+const createEventSchema = baseEventSchema.extend({
+  startsAt: z.coerce.date().refine((d) => d.getTime() > Date.now(), 'Event must start in the future'),
+});
+
+const updateEventSchema = baseEventSchema
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Provide at least one field to update');
 

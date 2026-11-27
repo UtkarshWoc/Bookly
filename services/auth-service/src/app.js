@@ -12,7 +12,8 @@ app.set('case sensitive routing', true);
 app.set('strict routing', true);
 app.use(helmet());
 app.use(express.json({ limit: '100kb' }));
-app.use(morgan(':method :url :status :response-time ms', { skip: (req) => req.url === '/health' }));
+morgan.token('req-id', (req) => req.get('x-request-id') || '-');
+app.use(morgan(':req-id :method :url :status :response-time ms', { skip: (req) => req.url === '/health' }));
 
 app.use(routes);
 
