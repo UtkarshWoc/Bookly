@@ -417,6 +417,22 @@ There is **one** `.env` at the repository root. Docker Compose reads it for `${V
 
 ## Testing
 
+### Unit tests (each service & frontend helpers)
+
+Run unit tests locally with Node's built-in test runner (`node --test`):
+
+```bash
+npm --prefix services/auth-service test
+npm --prefix services/event-service test
+npm --prefix services/seat-service test
+npm --prefix services/booking-service test
+npm --prefix services/notification-service test
+npm --prefix frontend test
+npm --prefix frontend run lint
+```
+
+GitHub Actions CI (`.github/workflows/ci.yml`) runs all unit tests, frontend lint/build, and the Docker Compose end-to-end tests below.
+
 ### End-to-end smoke test (24 checks)
 
 Run from the repository root:

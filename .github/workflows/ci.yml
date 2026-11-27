@@ -1,0 +1,73 @@
+name: Bookly CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - services/auth-service
+          - services/event-service
+          - services/seat-service
+          - services/booking-service
+          - services/notification-service
+          - frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+      - run: npm ci
+        working-directory: ${{ matrix.service }}
+      - run: npm test
+        working-directory: ${{ matrix.service }}
+
+  frontend-lint-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+
+  e2e-docker:
+    runs-on: ubuntu-latest
+    needs: [unit-tests, frontend-lint-build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare .env
+        run: cp .env.example .env
+      - name: Start stack
+        run: docker compose up -d --build --wait
+      - name: Run end-to-end smoke test
+        run: node scripts/smoke-test.js
+      - name: Run 50-way seat race test
+        run: |
+          cd scripts/seat-race
+          npm ci
+          node race.js 50
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
