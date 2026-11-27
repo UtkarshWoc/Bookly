@@ -23,6 +23,12 @@ module.exports = Object.freeze({
     secret: required('JWT_SECRET'),
     expiresIn: process.env.JWT_EXPIRES_IN || '1h',
   },
+  cookie: {
+    tokenName: process.env.AUTH_COOKIE_NAME || 'bookly_token',
+    csrfName: process.env.CSRF_COOKIE_NAME || 'bookly_csrf',
+    sameSite: process.env.COOKIE_SAME_SITE || 'lax',
+    secure: process.env.COOKIE_SECURE,
+  },
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 10),
   admin: {
     name: process.env.ADMIN_NAME || 'Bookly Admin',

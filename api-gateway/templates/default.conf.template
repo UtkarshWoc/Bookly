@@ -49,10 +49,26 @@ upstream seat_service_grpc {
 proxy_cache_path /var/cache/nginx/events levels=1:2 keys_zone=events_cache:10m
                  max_size=100m inactive=60s use_temp_path=off;
 
+# Only emit HSTS when the request arrived over TLS so HTTP localhost dev stays unaffected.
+map $scheme $hsts_header {
+    https "max-age=31536000; includeSubDomains";
+    default "";
+}
+
 server {
     listen 80;
+    listen 443 ssl;
+    http2 on;
     server_name _;
     client_max_body_size 1m;
+
+    ssl_certificate     ${TLS_CERT_PATH};
+    ssl_certificate_key ${TLS_KEY_PATH};
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
 
     # Identity defaults to empty; only auth_request (auth-required.conf) fills it.
     set $bookly_user_id "";
@@ -72,6 +88,7 @@ server {
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header X-Original-Method $request_method;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
     }

@@ -1,8 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { buildSeatGrid, sortSeats, seatsLeft } from '../src/lib/seats.js';
 import { formatMoney, timeAgo } from '../src/lib/format.js';
 import { SERVICES, SEAT_RPCS, endpointId } from '../src/lib/endpoints.js';
+import { readCookie } from '../src/lib/api/client.js';
 
 describe('frontend seats helpers', () => {
   it('builds lettered rows and numbered seats', () => {
@@ -41,5 +44,25 @@ describe('endpoints catalog', () => {
     const ids = SERVICES.flatMap((s) => s.endpoints).map(endpointId);
     assert.equal(new Set(ids).size, ids.length);
     assert.deepEqual(SEAT_RPCS.map((r) => r.name), ['LockSeats', 'ConfirmSeats', 'ReleaseSeats', 'GetSeatMap']);
+  });
+});
+
+describe('client cookie & auth hardening', () => {
+  it('extracts CSRF cookie from document.cookie safely', () => {
+    globalThis.document = { cookie: 'other=1; bookly_csrf=abc123def; theme=paper' };
+    try {
+      assert.equal(readCookie('bookly_csrf'), 'abc123def');
+      assert.equal(readCookie('missing'), null);
+    } finally {
+      delete globalThis.document;
+    }
+  });
+
+  it('does not persist JWTs in localStorage and includes credentials on auth endpoints', () => {
+    const clientSource = fs.readFileSync(path.resolve(import.meta.dirname, '../src/lib/api/client.js'), 'utf8');
+    const authApiSource = fs.readFileSync(path.resolve(import.meta.dirname, '../src/lib/api/auth.api.js'), 'utf8');
+    assert.equal(clientSource.includes('localStorage'), false);
+    assert.equal(clientSource.includes("credentials: auth ? 'include' : 'omit'"), true);
+    assert.equal(authApiSource.includes('auth: false'), false);
   });
 });

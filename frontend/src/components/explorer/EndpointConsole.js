@@ -100,7 +100,7 @@ export default function EndpointConsole({ endpoint, defaults, signedIn }) {
         </div>
         <p className="mt-2 text-ink-soft">{endpoint.description}</p>
         {endpoint.access !== 'public' && !signedIn && (
-          <p className="mt-2 text-sm text-marigold-deep">Sign in first — this route needs a token, otherwise nginx answers 401.</p>
+          <p className="mt-2 text-sm text-marigold-deep">Sign in first — this route needs an active session cookie, otherwise nginx answers 401.</p>
         )}
       </div>
 
@@ -160,7 +160,7 @@ export default function EndpointConsole({ endpoint, defaults, signedIn }) {
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={sendToken} onChange={(e) => setSendToken(e.target.checked)} className="size-4 accent-ink" />
-            Send my token
+            Send session cookie
           </label>
           <Button onClick={send} loading={sending}>
             Send request

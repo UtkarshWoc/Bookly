@@ -1,18 +1,22 @@
 const authService = require('../services/auth.service');
 const tokenService = require('../services/token.service');
+const { setAuthCookies, clearAuthCookies } = require('../utils/cookies');
 
 async function register(req, res) {
   const result = await authService.register(req.body);
+  setAuthCookies(req, res, result);
   res.status(201).json(result);
 }
 
 async function login(req, res) {
   const result = await authService.login(req.body);
+  setAuthCookies(req, res, result);
   res.json(result);
 }
 
 async function logout(req, res) {
   const revokedForSeconds = await tokenService.revoke(req.auth);
+  clearAuthCookies(req, res);
   res.json({ message: 'Logged out', revokedForSeconds });
 }
 

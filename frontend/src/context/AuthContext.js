@@ -2,72 +2,64 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authApi } from '@/lib/api/auth.api';
-import { readSession, writeSession } from '@/lib/api/client';
+import { readCookie } from '@/lib/api/client';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null);
+  const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
-  const save = useCallback((next) => {
-    writeSession(next);
-    setSession(next);
-  }, []);
-
-  // Restore the session and confirm the token is still valid (it may have been revoked or expired).
+  // Restore session from the httpOnly cookie (no token ever touches localStorage).
   useEffect(() => {
-    const stored = readSession();
-    if (!stored) {
+    if (!readCookie('bookly_csrf')) {
       setReady(true);
       return;
     }
-    setSession(stored);
     authApi
       .me()
-      .then(({ user }) => save({ ...stored, user }))
-      .catch(() => save(null))
+      .then(({ user: current }) => setUser(current))
+      .catch(() => setUser(null))
       .finally(() => setReady(true));
-  }, [save]);
+  }, []);
 
-  // Any 401 from the gateway means the token is no longer usable.
+  // Any 401 from the gateway means the session cookie is missing, expired, or revoked.
   useEffect(() => {
-    const clear = () => save(null);
+    const clear = () => setUser(null);
     window.addEventListener('bookly:unauthorized', clear);
     return () => window.removeEventListener('bookly:unauthorized', clear);
-  }, [save]);
+  }, []);
 
   const login = useCallback(async (credentials) => {
-    const { user, token, expiresAt } = await authApi.login(credentials);
-    save({ user, token, expiresAt });
-    return user;
-  }, [save]);
+    const { user: next } = await authApi.login(credentials);
+    setUser(next);
+    return next;
+  }, []);
 
   const register = useCallback(async (details) => {
-    const { user, token, expiresAt } = await authApi.register(details);
-    save({ user, token, expiresAt });
-    return user;
-  }, [save]);
+    const { user: next } = await authApi.register(details);
+    setUser(next);
+    return next;
+  }, []);
 
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } finally {
-      save(null);
+      setUser(null);
     }
-  }, [save]);
+  }, []);
 
   const value = useMemo(
     () => ({
       ready,
-      user: session?.user ?? null,
-      token: session?.token ?? null,
-      isAdmin: session?.user?.role === 'admin',
+      user,
+      isAdmin: user?.role === 'admin',
       login,
       register,
       logout,
     }),
-    [ready, session, login, register, logout],
+    [ready, user, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,8 +1,8 @@
 // Every request goes to the same origin under /api/* — the nginx api-gateway
 // (or the Next.js dev rewrite) routes it to the owning service.
 
-const SESSION_KEY = 'bookly.session';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export class ApiError extends Error {
   constructor(status, message, details) {
@@ -12,21 +12,20 @@ export class ApiError extends Error {
   }
 }
 
-export function readSession() {
-  try {
-    return JSON.parse(window.localStorage.getItem(SESSION_KEY) || 'null');
-  } catch {
-    return null;
+export function readCookie(name) {
+  if (typeof document === 'undefined' || !document.cookie) return null;
+  for (const part of document.cookie.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) continue;
+    if (part.slice(0, idx).trim() === name) {
+      try {
+        return decodeURIComponent(part.slice(idx + 1).trim());
+      } catch {
+        return part.slice(idx + 1).trim();
+      }
+    }
   }
-}
-
-export function writeSession(session) {
-  try {
-    if (session) window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    else window.localStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* storage unavailable: session lives in memory only */
-  }
+  return null;
 }
 
 export function newIdempotencyKey(prefix = 'req') {
@@ -45,15 +44,18 @@ function parse(text) {
 /**
  * Low-level call that never throws on HTTP errors. Returns status, headers,
  * parsed body and timing — used by the API explorer.
+ * Auth relies on the httpOnly `bookly_token` cookie + `X-CSRF-Token` header.
  */
 export async function rawRequest(path, { method = 'GET', body, headers = {}, auth = true } = {}) {
-  const token = auth ? readSession()?.token : null;
+  const upperMethod = method.toUpperCase();
+  const csrfToken = auth && !SAFE_METHODS.has(upperMethod) ? readCookie('bookly_csrf') : null;
   const started = performance.now();
   const res = await fetch(`${API_BASE}${path}`, {
-    method,
+    method: upperMethod,
+    credentials: auth ? 'include' : 'omit',
     headers: {
       ...(body !== undefined && { 'Content-Type': 'application/json' }),
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(csrfToken && { 'X-CSRF-Token': csrfToken }),
       ...headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

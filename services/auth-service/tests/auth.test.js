@@ -27,6 +27,8 @@ require.cache[require.resolve('../src/config/redis')] = {
 
 const tokenService = require('../src/services/token.service');
 const authService = require('../src/services/auth.service');
+const authenticate = require('../src/middlewares/authenticate');
+const { parseCookies, setAuthCookies, clearAuthCookies, verifyCsrf, isSecureRequest } = require('../src/utils/cookies');
 const User = require('../src/models/user.model');
 const { registerSchema, loginSchema } = require('../src/validators/auth.validators');
 
@@ -113,5 +115,77 @@ describe('auth.service', () => {
       () => authService.login({ email: 'nobody@test.dev', password: 'password123' }),
       { status: 401, message: 'Invalid email or password' },
     );
+  });
+});
+
+describe('httpOnly cookie auth & CSRF protection', () => {
+  beforeEach(() => store.clear());
+
+  it('sets httpOnly auth cookie + readable CSRF cookie and marks Secure behind HTTPS proxy', () => {
+    const setCookies = [];
+    const req = { secure: false, get: (h) => (h.toLowerCase() === 'x-forwarded-proto' ? 'https' : undefined) };
+    const res = {
+      cookie(name, value, opts) {
+        setCookies.push({ name, value, opts });
+      },
+      clearCookie(name, opts) {
+        setCookies.push({ cleared: name, opts });
+      },
+    };
+
+    assert.equal(isSecureRequest(req), true);
+    setAuthCookies(req, res, { token: 'jwt.val', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    const authCookie = setCookies.find((c) => c.name === 'bookly_token');
+    const csrfCookie = setCookies.find((c) => c.name === 'bookly_csrf');
+    assert.equal(authCookie.opts.httpOnly, true);
+    assert.equal(authCookie.opts.secure, true);
+    assert.equal(csrfCookie.opts.httpOnly, false);
+
+    clearAuthCookies(req, res);
+    assert.equal(setCookies.some((c) => c.cleared === 'bookly_token'), true);
+  });
+
+  it('parses cookies and enforces double-submit CSRF on cookie-authenticated mutations', async () => {
+    const { token } = tokenService.issue({ id: 'u-cookie', role: 'user', email: 'c@test.dev', name: 'C' });
+    const csrf = 'csrf-random-token-123456';
+    const cookieHeader = `bookly_token=${encodeURIComponent(token)}; bookly_csrf=${csrf}`;
+
+    assert.equal(parseCookies(cookieHeader).bookly_token, token);
+    assert.equal(
+      verifyCsrf({ headers: { cookie: cookieHeader }, get: (h) => (h.toLowerCase() === 'x-csrf-token' ? csrf : '') }),
+      true,
+    );
+
+    // Safe GET through /verify needs no X-CSRF-Token.
+    const getReq = {
+      method: 'GET',
+      headers: { cookie: cookieHeader },
+      get: (h) => (h.toLowerCase() === 'x-original-method' ? 'GET' : undefined),
+    };
+    await new Promise((resolve, reject) => authenticate(getReq, {}, (err) => (err ? reject(err) : resolve())));
+    assert.equal(getReq.auth.sub, 'u-cookie');
+
+    // Mutating X-Original-Method without X-CSRF-Token is rejected with 403.
+    const missingCsrfReq = {
+      method: 'GET',
+      headers: { cookie: cookieHeader },
+      get: (h) => (h.toLowerCase() === 'x-original-method' ? 'POST' : undefined),
+    };
+    const err = await new Promise((resolve) => authenticate(missingCsrfReq, {}, resolve));
+    assert.equal(err.status, 403);
+
+    // Mutating X-Original-Method with matching X-CSRF-Token succeeds.
+    const validCsrfReq = {
+      method: 'GET',
+      headers: { cookie: cookieHeader },
+      get: (h) => {
+        const key = h.toLowerCase();
+        if (key === 'x-original-method') return 'POST';
+        if (key === 'x-csrf-token') return csrf;
+        return undefined;
+      },
+    };
+    await new Promise((resolve, reject) => authenticate(validCsrfReq, {}, (e) => (e ? reject(e) : resolve())));
+    assert.equal(validCsrfReq.auth.sub, 'u-cookie');
   });
 });
