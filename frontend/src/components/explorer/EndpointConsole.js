@@ -186,7 +186,7 @@ export default function EndpointConsole({ endpoint, defaults, signedIn }) {
               ))}
             </dl>
           )}
-          <pre className="max-h-[28rem] overflow-auto bg-ink px-4 py-3 font-mono text-[13px] leading-relaxed text-[#e7eaf3]">
+          <pre className="max-h-[28rem] overflow-auto bg-ink px-4 py-3 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words text-[#e7eaf3]">
             {response.data === null ? '(empty body)' : JSON.stringify(response.data, null, 2)}
           </pre>
         </div>

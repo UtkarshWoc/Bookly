@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { bookingsApi } from '@/lib/api/bookings.api';
 import { dateParts, formatMoney, formatTime } from '@/lib/format';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
@@ -45,9 +45,16 @@ export default function MyTicketsPage() {
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('upcoming');
 
+  const load = useCallback(() => {
+    bookingsApi.list().then((r) => setBookings(r.data)).catch(setError);
+  }, []);
+
   useEffect(() => {
-    if (allowed) bookingsApi.list().then((r) => setBookings(r.data)).catch(setError);
-  }, [allowed]);
+    if (!allowed) return undefined;
+    load();
+    window.addEventListener('bookly:bookings-changed', load);
+    return () => window.removeEventListener('bookly:bookings-changed', load);
+  }, [allowed, load]);
 
   const groups = useMemo(
     () => Object.fromEntries(TABS.map((t) => [t.id, (bookings || []).filter(t.match)])),
@@ -81,6 +88,16 @@ export default function MyTicketsPage() {
       </div>
 
       <div className="mt-6" role="tabpanel">
+        {tab === 'upcoming' && groups.pending.length > 0 && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-marigold-soft px-4 py-3 text-sm">
+            <span className="font-medium text-marigold-deep">
+              You have {groups.pending.length} seat hold{groups.pending.length === 1 ? '' : 's'} waiting for payment.
+            </span>
+            <button type="button" onClick={() => setTab('pending')} className="shrink-0 font-semibold text-marigold-deep underline underline-offset-4">
+              View hold{groups.pending.length === 1 ? '' : 's'}
+            </button>
+          </div>
+        )}
         {list.length === 0 ? (
           <EmptyState
             title={tab === 'upcoming' ? 'No upcoming tickets yet' : tab === 'pending' ? 'Nothing waiting for payment' : 'No past bookings'}

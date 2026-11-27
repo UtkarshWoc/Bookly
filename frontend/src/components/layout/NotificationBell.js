@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { notificationsApi } from '@/lib/api/notifications.api';
 import { timeAgo } from '@/lib/format';
@@ -43,6 +44,17 @@ export default function NotificationBell() {
     load();
   };
 
+  const markOne = async (n) => {
+    if (!n.read) {
+      setState((prev) => ({
+        data: prev.data.map((item) => (item.id === n.id ? { ...item, read: true } : item)),
+        unread: Math.max(0, prev.unread - 1),
+      }));
+      await notificationsApi.markRead(n.id).catch(() => {});
+    }
+    if (n.bookingId) setOpen(false);
+  };
+
   return (
     <div className="relative" ref={panelRef}>
       <button
@@ -80,12 +92,33 @@ export default function NotificationBell() {
               </li>
             )}
             {state.data.map((n) => (
-              <li key={n.id} className={`border-b border-line/70 px-4 py-3 last:border-0 ${n.read ? '' : 'bg-marigold-soft/40'}`}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-sm font-semibold">{n.title}</p>
-                  <span className="shrink-0 text-xs text-ink-soft">{timeAgo(n.createdAt)}</span>
+              <li key={n.id} className={`border-b border-line/70 last:border-0 ${n.read ? '' : 'bg-marigold-soft/40'}`}>
+                <div className="px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    {n.bookingId ? (
+                      <Link
+                        href={`/bookings/${n.bookingId}`}
+                        onClick={() => markOne(n)}
+                        className="text-sm font-semibold hover:underline"
+                      >
+                        {n.title}
+                      </Link>
+                    ) : (
+                      <p className="text-sm font-semibold">{n.title}</p>
+                    )}
+                    <span className="shrink-0 text-xs text-ink-soft">{timeAgo(n.createdAt)}</span>
+                  </div>
+                  <p className="mt-0.5 text-sm text-ink-soft">{n.message}</p>
+                  {!n.read && (
+                    <button
+                      type="button"
+                      onClick={() => markOne(n)}
+                      className="mt-1.5 text-xs font-semibold text-teal hover:underline"
+                    >
+                      Mark as read
+                    </button>
+                  )}
                 </div>
-                <p className="mt-0.5 text-sm text-ink-soft">{n.message}</p>
               </li>
             ))}
           </ul>

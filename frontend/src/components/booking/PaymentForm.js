@@ -19,7 +19,7 @@ function formatExpiry(value) {
   return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
 }
 
-export default function PaymentForm({ amount, currency, onPay, paying, error }) {
+export default function PaymentForm({ amount, currency, onPay, paying, disabled = false, error }) {
   const [form, setForm] = useState({ cardHolder: '', cardNumber: '', expiry: '', cvc: '' });
   const errors = fieldErrors(error);
   const set = (key, format = (v) => v) => (e) => setForm((f) => ({ ...f, [key]: format(e.target.value) }));
@@ -65,8 +65,8 @@ export default function PaymentForm({ amount, currency, onPay, paying, error }) 
         </ul>
       </div>
 
-      <Button type="submit" variant="accent" size="lg" loading={paying} className="w-full">
-        Pay {formatMoney(amount, currency)}
+      <Button type="submit" variant="accent" size="lg" loading={paying} disabled={disabled} className="w-full">
+        {disabled ? 'Hold expired' : `Pay ${formatMoney(amount, currency)}`}
       </Button>
     </form>
   );

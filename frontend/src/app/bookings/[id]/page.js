@@ -34,12 +34,24 @@ export default function BookingPage() {
   const [loadError, setLoadError] = useState(null);
   const [payError, setPayError] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [holdEnded, setHoldEnded] = useState(false);
   // A fresh key per payment attempt; reused if the same attempt is retried.
   const [payKey, setPayKey] = useState(() => newIdempotencyKey('pay'));
 
   const load = useCallback(() => {
     bookingsApi.get(id).then(({ booking: b }) => setBooking(b)).catch(setLoadError);
   }, [id]);
+
+  const handleExpire = useCallback(() => {
+    setHoldEnded(true);
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!holdEnded || booking?.status !== 'PENDING') return undefined;
+    const timer = setTimeout(load, 1500);
+    return () => clearTimeout(timer);
+  }, [holdEnded, booking, load]);
 
   useEffect(() => {
     if (allowed) load();
@@ -51,6 +63,7 @@ export default function BookingPage() {
     try {
       const { booking: b } = await bookingsApi.pay(id, card, payKey);
       setBooking(b);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       notify('Payment received. Enjoy the show!', 'success');
     } catch (err) {
       if (err.status === 400) {
@@ -148,6 +161,10 @@ export default function BookingPage() {
     );
   }
 
+  const holdSeconds = booking.createdAt
+    ? Math.max(1, Math.round((new Date(booking.holdExpiresAt).getTime() - new Date(booking.createdAt).getTime()) / 1000))
+    : 300;
+
   return (
     <div className="py-2">
       <Link href={`/events/${booking.eventId}`} className="text-sm font-semibold text-ink-soft hover:text-ink">
@@ -157,9 +174,9 @@ export default function BookingPage() {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_420px]">
         <div className="flex flex-col gap-6">
-          <HoldTimer expiresAt={booking.holdExpiresAt} onExpire={load} />
+          <HoldTimer expiresAt={booking.holdExpiresAt} totalSeconds={holdSeconds} onExpire={handleExpire} />
           {summary}
-          <Button variant="danger" className="self-start" loading={busy === 'release'} disabled={busy === 'pay'} onClick={release}>
+          <Button variant="danger" className="self-start" loading={busy === 'release'} disabled={busy === 'pay' || holdEnded} onClick={release}>
             Release these seats
           </Button>
         </div>
@@ -167,7 +184,7 @@ export default function BookingPage() {
           <h2 id="pay-heading" className="mb-5 font-display text-xl font-bold">
             Payment details
           </h2>
-          <PaymentForm amount={booking.amount} currency={booking.currency} onPay={pay} paying={busy === 'pay'} error={payError} />
+          <PaymentForm amount={booking.amount} currency={booking.currency} onPay={pay} paying={busy === 'pay'} disabled={holdEnded} error={payError} />
         </section>
       </div>
     </div>

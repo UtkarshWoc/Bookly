@@ -13,7 +13,7 @@ function toLocalInput(value) {
 
 const EMPTY = {
   title: '', description: '', category: 'Concert', venue: '', city: '',
-  startsAt: '', price: '', currency: 'INR', rows: 8, seatsPerRow: 12,
+  startsAt: '', price: '', currency: 'INR', imageUrl: '', rows: 8, seatsPerRow: 12,
 };
 
 function fromEvent(event) {
@@ -27,6 +27,7 @@ function fromEvent(event) {
     startsAt: toLocalInput(event.startsAt),
     price: event.price,
     currency: event.currency,
+    imageUrl: event.imageUrl || '',
     rows: event.layout.rows,
     seatsPerRow: event.layout.seatsPerRow,
   };
@@ -48,6 +49,7 @@ export default function EventForm({ event, categories, onSubmit, onCancel, savin
       startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : '',
       price: Number(form.price),
       currency: form.currency,
+      imageUrl: form.imageUrl.trim(),
       layout: { rows: Number(form.rows), seatsPerRow: Number(form.seatsPerRow) },
     });
   };
@@ -72,6 +74,7 @@ export default function EventForm({ event, categories, onSubmit, onCancel, savin
         <Field label="City" value={form.city} onChange={set('city')} error={errors.city} required />
         <Field label="Price per seat" type="number" min="0" value={form.price} onChange={set('price')} error={errors.price} required />
         <Field label="Currency" value={form.currency} maxLength={3} onChange={set('currency')} error={errors.currency} />
+        <Field label="Image URL" type="url" placeholder="https://…" value={form.imageUrl} onChange={set('imageUrl')} error={errors.imageUrl} hint="Optional cover image URL" />
         <Field label="Rows" type="number" min="1" max="26" value={form.rows} onChange={set('rows')} error={errors['layout.rows']} hint="1–26, lettered A–Z" />
         <Field label="Seats per row" type="number" min="1" max="40" value={form.seatsPerRow} onChange={set('seatsPerRow')} error={errors['layout.seatsPerRow']} hint="1–40" />
       </div>

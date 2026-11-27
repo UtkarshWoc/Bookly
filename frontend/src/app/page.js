@@ -13,14 +13,21 @@ const PAGE_SIZE = 8;
 export default function HomePage() {
   const [featured, setFeatured] = useState(null);
   const [categories, setCategories] = useState([]);
-  const [filters, setFilters] = useState({ q: '', category: '' });
+  const [cities, setCities] = useState([]);
+  const [filters, setFilters] = useState({ q: '', category: '', city: '' });
   const [query, setQuery] = useState('');
   const [result, setResult] = useState({ data: [], pagination: null });
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    eventsApi.list({ limit: 1 }).then((r) => setFeatured(r.data[0] ?? null)).catch(() => {});
+    eventsApi
+      .list({ limit: 50 })
+      .then((r) => {
+        setFeatured(r.data[0] ?? null);
+        setCities([...new Set(r.data.map((e) => e.city).filter(Boolean))].sort());
+      })
+      .catch(() => {});
     eventsApi.categories().then((r) => setCategories(r.categories)).catch(() => {});
   }, []);
 
@@ -79,18 +86,40 @@ export default function HomePage() {
           <h2 id="upcoming-heading" className="font-display text-3xl font-bold tracking-tight">
             Upcoming events
           </h2>
-          <div className="w-full sm:w-72">
-            <label htmlFor="search" className="sr-only">
-              Search events
-            </label>
-            <input
-              id="search"
-              type="search"
-              placeholder="Search by name, venue or city"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className={inputClasses}
-            />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {cities.length > 0 && (
+              <div className="sm:w-44">
+                <label htmlFor="city-filter" className="sr-only">
+                  Filter by city
+                </label>
+                <select
+                  id="city-filter"
+                  value={filters.city}
+                  onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
+                  className={inputClasses}
+                >
+                  <option value="">All cities</option>
+                  {cities.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="w-full sm:w-72">
+              <label htmlFor="search" className="sr-only">
+                Search events
+              </label>
+              <input
+                id="search"
+                type="search"
+                placeholder="Search by name, venue or city"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className={inputClasses}
+              />
+            </div>
           </div>
         </div>
 

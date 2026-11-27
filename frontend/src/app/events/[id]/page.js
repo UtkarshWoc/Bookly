@@ -14,7 +14,7 @@ import SeatMap from '@/components/seats/SeatMap';
 import Button from '@/components/ui/Button';
 import { ErrorNotice, Spinner } from '@/components/ui/States';
 
-const MAX_SEATS = 8;
+const DEFAULT_MAX_SEATS = 8;
 const POLL_MS = 5000;
 
 export default function EventPage() {
@@ -60,11 +60,13 @@ export default function EventPage() {
   // One key per distinct selection: a double-click or network retry cannot create two holds.
   const holdKey = useMemo(() => newIdempotencyKey('hold'), [seats.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const maxSeats = availability.maxSeatsPerBooking ?? DEFAULT_MAX_SEATS;
+
   const toggle = (seat) => {
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(seat)) next.delete(seat);
-      else if (next.size >= MAX_SEATS) notify(`You can pick up to ${MAX_SEATS} seats per booking.`);
+      else if (next.size >= maxSeats) notify(`You can pick up to ${maxSeats} seats per booking.`);
       else next.add(seat);
       return next;
     });
@@ -93,6 +95,7 @@ export default function EventPage() {
 
   const total = event.price * seats.length;
   const left = seatsLeft(event, availability);
+  const started = new Date(event.startsAt) <= new Date();
 
   return (
     <article>
@@ -124,6 +127,12 @@ export default function EventPage() {
 
       {event.description && <p className="mt-6 max-w-2xl text-ink-soft">{event.description}</p>}
 
+      {started && (
+        <p role="status" className="mt-6 rounded-2xl bg-marigold-soft px-5 py-3 text-sm font-semibold text-marigold-deep">
+          This event has already started — ticket sales are closed.
+        </p>
+      )}
+
       <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_320px]">
         <section aria-labelledby="seats-heading" className="min-w-0 rounded-[18px] border border-line bg-card p-4 sm:p-8">
           <h2 id="seats-heading" className="sr-only">
@@ -135,7 +144,7 @@ export default function EventPage() {
             bookedSeats={availability.bookedSeats}
             selected={selected}
             onToggle={toggle}
-            disabled={holding}
+            disabled={holding || started}
           />
         </section>
 
@@ -144,7 +153,9 @@ export default function EventPage() {
             <div className="min-h-32 pb-8">
               <h2 className="font-display text-xl font-bold">Your seats</h2>
               {seats.length === 0 ? (
-                <p className="mt-3 text-sm text-ink-soft">Tap seats on the map to add them. You can pick up to {MAX_SEATS}.</p>
+                <p className="mt-3 text-sm text-ink-soft">
+                  {started ? 'Sales have closed for this event.' : `Tap seats on the map to add them. You can pick up to ${maxSeats}.`}
+                </p>
               ) : (
                 <ul className="mt-3 flex flex-wrap gap-1.5">
                   {seats.map((s) => (
@@ -170,8 +181,8 @@ export default function EventPage() {
                 </span>
                 <span className="font-display text-2xl font-bold">{formatMoney(total, event.currency)}</span>
               </div>
-              <Button variant="accent" size="lg" className="mt-4 w-full" disabled={seats.length === 0} loading={holding} onClick={hold}>
-                {user ? `Hold ${seats.length || ''} seat${seats.length === 1 ? '' : 's'}` : 'Sign in to book'}
+              <Button variant="accent" size="lg" className="mt-4 w-full" disabled={started || seats.length === 0} loading={holding} onClick={hold}>
+                {started ? 'Sales closed' : user ? `Hold ${seats.length || ''} seat${seats.length === 1 ? '' : 's'}` : 'Sign in to book'}
               </Button>
               <p className="mt-3 text-center text-xs text-ink-soft">Seats are held for 5 minutes while you pay.</p>
             </div>
