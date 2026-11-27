@@ -54,12 +54,19 @@ async function main() {
   console.log('auth-service');
   const alice = await api('POST', '/auth/register', { body: { name: 'Alice', email: `alice.${run}@test.dev`, password: 'password123' } });
   check('register returns 201 + token', alice.status === 201 && alice.body.token);
+  const setCookies = alice.headers.getSetCookie ? alice.headers.getSetCookie() : [];
+  const tokenCookie = setCookies.find((c) => c.startsWith('bookly_token='));
+  const csrfCookie = setCookies.find((c) => c.startsWith('bookly_csrf='));
+  check('register sets httpOnly bookly_token + bookly_csrf cookies', Boolean(tokenCookie && /HttpOnly/i.test(tokenCookie) && csrfCookie));
+  const cookieHeader = `${tokenCookie.split(';')[0]}; ${csrfCookie.split(';')[0]}`;
+  const csrfValue = csrfCookie.split(';')[0].split('=')[1];
   await sleep(1000);
   const bob = await api('POST', '/auth/register', { body: { name: 'Bob', email: `bob.${run}@test.dev`, password: 'password123' } });
   check('second user registers', bob.status === 201, JSON.stringify(bob.body));
   const A = alice.body.token;
   const B = bob.body.token;
-  check('GET /auth/me works', (await api('GET', '/auth/me', { token: A })).body.user.name === 'Alice');
+  check('GET /auth/me works with httpOnly cookie', (await api('GET', '/auth/me', { headers: { Cookie: cookieHeader } })).body.user.name === 'Alice');
+  check('cookie-auth mutation without X-CSRF-Token → 403', (await api('POST', '/bookings', { body: { eventId: '507f1f77bcf86cd799439011', seats: ['A1'] }, headers: { Cookie: cookieHeader } })).status === 403);
   check('bookings without token → 401', (await api('GET', '/bookings')).status === 401);
 
   console.log('\nevent-service');
@@ -119,15 +126,15 @@ async function main() {
   }
   check(`gateway load-balances across ${replicas.size} booking replicas`, replicas.size >= 2, [...replicas].join(', '));
 
-  console.log('\nnotification-service (Redis Pub/Sub)');
-  await sleep(500);
+  console.log('\nnotification-service (Redis Streams)');
+  await sleep(700);
   const notes = await api('GET', '/notifications', { token: A });
   const types = notes.body.data.map((n) => n.type);
   check('Alice got confirmed + failed notifications', types.includes('booking.confirmed') && types.includes('booking.failed'));
   check('mark all read', (await api('POST', '/notifications/read-all', { token: A })).body.updated >= 2);
 
-  console.log('\nlogout');
-  check('logout blacklists the token', (await api('POST', '/auth/logout', { token: A })).status === 200);
+  console.log('\nlogout & TLS');
+  check('logout blacklists the token', (await api('POST', '/auth/logout', { headers: { Cookie: cookieHeader, 'X-CSRF-Token': csrfValue } })).status === 200);
   check('revoked token rejected at the gateway → 401', (await api('GET', '/bookings', { token: A })).status === 401);
 
   console.log(`\nAll ${passed} checks passed.`);

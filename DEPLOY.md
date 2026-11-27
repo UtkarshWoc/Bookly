@@ -175,12 +175,18 @@ The bootstrap admin account is created once on initial start. To update the admi
 ## 6. Production Infrastructure Runbook
 
 ### TLS / SSL Termination & Reverse Proxy
-The included nginx gateway handles routing, caching, and rate limiting via plain HTTP on port 80. In production:
-- Terminate TLS at an edge proxy (Cloudflare, AWS ALB, Traefik, or an external Nginx server with Let's Encrypt).
-- Ensure the edge proxy forwards standard headers:
+The included nginx gateway terminates TLS 1.2/1.3 natively on port `443` (mapped to `GATEWAY_HTTPS_PORT`, default `8443`), generating a self-signed development certificate on boot when custom certs are absent. In production:
+- Mount your CA-signed certificate and private key at `TLS_CERT_PATH` (`/etc/nginx/certs/tls.crt`) and `TLS_KEY_PATH` (`/etc/nginx/certs/tls.key`), or terminate TLS at an edge Ingress/ALB (`k8s/ingress.yaml`).
+- Ensure any upstream edge proxy forwards standard headers:
   - `X-Forwarded-Proto https;`
   - `X-Forwarded-For $remote_addr;`
   - `Host $host;`
+
+### Kubernetes Deployment
+Ready-to-apply Kustomize manifests live in [`k8s/`](k8s/README.md) (`namespace`, `ConfigMap`, `Secret` template, `StatefulSet`s for MongoDB & Redis, `Deployment`s, `HorizontalPodAutoscaler` for `booking-service`, TLS `Ingress`, and `NetworkPolicy` isolation):
+```bash
+kubectl apply -k k8s/
+```
 
 ### Disabling the Dev gRPC Proxy
 The gRPC loopback proxy (`9090`) is intended for local race tests and debugging with `grpcurl`. In production:

@@ -37,7 +37,7 @@ docker compose up -d --build  # first build takes a few minutes
 
 | What | URL |
 | --- | --- |
-| Web app | http://localhost:8080 |
+| Web app | http://localhost:8080 (or https://localhost:8443 with TLS) |
 | API explorer (try every endpoint) | http://localhost:8080/explorer |
 | REST API (through the gateway) | http://localhost:8080/api/... |
 | gRPC proxy to seat-service (dev only, loopback) | `127.0.0.1:9090` |
@@ -135,7 +135,7 @@ The config is a **template**. nginx's entrypoint fills in ports, rate limits and
 | 2 | db1 | **Cache-aside** for event detail | event-service | `event:{id}` with TTL. Deleted on admin update/delete. Exposed as the `X-Cache: HIT/MISS` header |
 | 3 | db2 | **Distributed seat lock** | seat-service | `SET seat:{eventId}:{seatNo} {userId} NX EX 300`. Two users can't hold the same seat, and abandoned holds expire on their own. Release is a Lua compare-and-delete so you can only free your own lock |
 | 4 | db3 | **Idempotency keys** | booking-service | `idem:{user}:{route}:{key}`, so a retried `POST /bookings` or `/pay` replays the first response instead of creating a duplicate or charging twice. Shared by both replicas |
-| 5 | db4 | **Pub/Sub event bus** | notification-service | Subscribes to channel `bookly.bookings` for domain events (`booking.confirmed / failed / cancelled`) |
+| 5 | db4 | **Streams event bus** | notification-service | Producer (`XADD`) to `bookly.bookings.stream`; consumer group `notification-workers` (`XREADGROUP` + `XAUTOCLAIM` + `XACK`) for at-least-once delivery |
 
 ### gRPC ([`proto/seat.proto`](proto/seat.proto))
 
@@ -513,7 +513,7 @@ The gateway's features (`auth_request`, caching, rate limits) only exist in ngin
 
 ## Deployment
 
-For a production deployment checklist and runbook, see [`DEPLOY.md`](DEPLOY.md).
+For a production deployment checklist and runbook, see [`DEPLOY.md`](DEPLOY.md). Kubernetes manifests live in [`k8s/`](k8s/README.md) (`kubectl apply -k k8s/`).
 
 ### Production prerequisites
 
@@ -551,11 +551,15 @@ The rough edges show up too: browsers can't speak raw gRPC, so seat availability
 
 **MongoDB instead of Postgres.** The original plan named Postgres. This build uses MongoDB with one logical database per service, which keeps the same ownership boundaries. Swapping a service's persistence only touches its `models/` and `config/database.js`.
 
+**Hardening implemented:**
+- **Auth & CSRF:** Browsers receive `httpOnly` `bookly_token` cookies plus double-submit `bookly_csrf` / `X-CSRF-Token` verification (no JWTs in `localStorage`). Bearer tokens remain supported for CLI/API clients.
+- **Transport TLS:** `api-gateway` terminates TLS 1.2/1.3 on port 443 (`8443` on host) with HSTS and security headers.
+- **At-least-once events:** Booking events use Redis Streams (`XADD` + `XREADGROUP` + `XAUTOCLAIM` + `XACK`) with idempotent deduplication in MongoDB.
+- **Kubernetes:** Complete Kustomize manifests in `k8s/` with health probes, HPA, Ingress TLS, and `NetworkPolicy` isolation.
+
 **Known limitations (it's a learning project):**
-- The JWT is stored in `localStorage`. A production build would use an httpOnly cookie.
 - Payments are mocked.
-- Pub/Sub is at-most-once. Redis Streams or a broker would add delivery guarantees.
-- No TLS between gateway and services.
+- No mTLS between internal services inside the private network.
 
 ---
 
